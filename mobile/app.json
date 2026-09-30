@@ -1,0 +1,35 @@
+{
+  "expo": {
+    "name": "DuoSave",
+    "slug": "duosave",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0A1128"
+    },
+    "ios": {
+      "bundleIdentifier": "app.duosave.mobile",
+      "supportsTablet": false
+    },
+    "android": {
+      "package": "app.duosave.mobile",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0A1128"
+      }
+    },
+    "plugins": [
+      "expo-secure-store",
+      "expo-notifications"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "42f59699-5120-400c-aaf0-485b2346703f"
+      }
+    }
+  }
+}
