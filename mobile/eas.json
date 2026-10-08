@@ -4,7 +4,7 @@
       "distribution": "internal",
       "android": { "buildType": "apk" },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://your-backend.vercel.app"
+        "EXPO_PUBLIC_API_URL": "https://backend-wheat-six-65.vercel.app/api"
       }
     }
   }

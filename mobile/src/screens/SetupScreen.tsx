@@ -15,8 +15,8 @@ export default function SetupScreen() {
     setBusy(false);
   };
   return (
-    <Screen title="Set up your vault">
-      <Card>
+    <Screen title="Set up your vault" onRefresh={refreshMe}>
+      <Card>         
         <T weight="700" size={16}>Start a new vault</T>
         <T muted size={13}>You will get a code to send to your partner.</T>
         <Input label="Vault name" value={name} onChangeText={setName} autoCapitalize="words" />

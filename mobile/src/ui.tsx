@@ -1,9 +1,10 @@
 import React, { useCallback, useRef, useState } from 'react';
 import {
-  ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleProp, Text,
+  ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleProp, Text, TextStyle,
   TextInput, TextInputProps, View, ViewStyle,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Image } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from './theme';
 import { useAuth } from './auth';
@@ -21,11 +22,31 @@ export function useLoad<T>(fn: () => Promise<T>) {
   const [error, setError] = useState<string | null>(null);
   const load = useCallback(async () => {
     setLoading(true);
-    try { setData(await ref.current()); setError(null); }
-    catch (e: any) { setError(e.message); }
-    setLoading(false);
+    try {
+      const res = await ref.current();
+      setData(res);
+      setError(null);
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
   }, []);
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+  useFocusEffect(useCallback(() => {
+    let active = true;
+    (async () => {
+      setLoading(true);
+      try {
+        const res = await ref.current();
+        if (active) { setData(res); setError(null); }
+      } catch (e: any) {
+        if (active) setError(e.message);
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => { active = false; };
+  }, []));
   return { data, loading, error, reload: load };
 }
 
@@ -42,6 +63,7 @@ export function Screen({ title, children, onRefresh, refreshing }: {
         keyboardShouldPersistTaps="handled"
         refreshControl={onRefresh ? <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={c.accent} /> : undefined}>
         <View>
+          <Image source={require('../assets/icon.png')} style={{ width: 72, height: 72, borderRadius: 18 }} />
           <Text style={{ color: c.accent, fontWeight: '700', fontSize: 13 }}>DuoSave</Text>
           <Text style={{ color: c.text, fontWeight: '800', fontSize: 28, marginTop: 2 }}>{title}</Text>
           <Text style={{ color: c.muted, fontSize: 12, marginTop: 2 }}>{linked}</Text>
@@ -62,7 +84,7 @@ export function Card({ children, style }: { children: React.ReactNode; style?: S
 }
 
 export function T({ children, size = 14, weight = '400', muted, color, style }: {
-  children: React.ReactNode; size?: number; weight?: '400' | '600' | '700' | '800'; muted?: boolean; color?: string; style?: StyleProp<ViewStyle>;
+  children: React.ReactNode; size?: number; weight?: '400' | '600' | '700' | '800'; muted?: boolean; color?: string; style?: StyleProp<TextStyle>;
 }) {
   const { c } = useTheme();
   return <Text style={[{ fontSize: size, fontWeight: weight, color: color ?? (muted ? c.muted : c.text) }, style as any]}>{children}</Text>;

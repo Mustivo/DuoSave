@@ -2,6 +2,7 @@ export type Profile = { id: string; name: string };
 export type Vault = {
   id: string; name: string; invite_code: string; currency: string;
   savings_goal: number; monthly_target: number; reminder_day: number;
+  created_by?: string;
 };
 export type Me = { profile: Profile; vault: Vault | null; partner: Profile | null };
 export type Member = { id: string; name: string; total: number; thisMonth: number; owed: number };

@@ -48,6 +48,8 @@ vault.post('/vault/join', h(async (req, res) => {
   const { code } = z.object({ code: z.string().min(4) }).parse(req.body);
   const { data: v } = await admin.from('vaults').select('*').eq('invite_code', code.trim().toUpperCase()).maybeSingle();
   if (!v) throw new HttpError(404, 'No vault found with that code');
+  const { count } = await admin.from('vault_members').select('*', { count: 'exact', head: true }).eq('vault_id', v.id);
+  if ((count ?? 0) >= 2) throw new HttpError(400, 'This vault is limited to 2 partners and is already full');
   const { error } = await admin.from('vault_members').insert({ vault_id: v.id, user_id: req.userId });
   if (error) throw new HttpError(400, error.message);
   await logAndAlertPartner(v.id, req.userId, 'join', 'Your partner joined the vault');
@@ -55,6 +57,10 @@ vault.post('/vault/join', h(async (req, res) => {
 }));
 
 vault.patch('/vault', requireVault, h(async (req, res) => {
+  const { data: currentVault } = await admin.from('vaults').select('created_by').eq('id', req.vaultId!).single();
+  if (currentVault?.created_by !== req.userId) {
+    throw new HttpError(403, 'Only the vault admin can edit the savings plan');
+  }
   const b = z.object({
     name: z.string().min(1).max(40).optional(),
     savings_goal: z.number().min(0).optional(),

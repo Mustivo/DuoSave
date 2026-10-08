@@ -13,6 +13,9 @@ export default function AuthScreen() {
   const [err, setErr] = useState<string | null>(null); const [busy, setBusy] = useState(false);
 
   const submit = async () => {
+    if (register && !name.trim()) { setErr('Please enter your name'); return; }
+    if (!email.trim()) { setErr('Please enter your email'); return; }
+    if (!pw || pw.length < 6) { setErr('Password must be at least 6 characters'); return; }
     setBusy(true); setErr(null);
     try { register ? await signUp(name.trim(), email.trim(), pw) : await signIn(email.trim(), pw); }
     catch (e: any) { setErr(e.message); }

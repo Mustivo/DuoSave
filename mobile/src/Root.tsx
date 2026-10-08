@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -22,10 +22,10 @@ const icon = (name: keyof typeof Ionicons.glyphMap, focused: keyof typeof Ionico
 export default function Root() {
   const { c, isDark } = useTheme();
   const { ready, me } = useAuth();
-  const navTheme = {
+  const navTheme = useMemo(() => ({
     ...(isDark ? DarkTheme : DefaultTheme),
     colors: { ...(isDark ? DarkTheme : DefaultTheme).colors, background: c.bg, card: c.card, border: c.border, text: c.text, primary: c.accent },
-  };
+  }), [isDark, c.bg, c.card, c.border, c.text, c.accent]);
 
   const bar = <StatusBar key={isDark ? 'dark' : 'light'} />;
 

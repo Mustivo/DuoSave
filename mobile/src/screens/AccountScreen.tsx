@@ -31,10 +31,19 @@ export default function AccountScreen() {
     catch (e: any) { setErr(e.message); }
   };
 
+  const isAdmin = !!(v && me?.profile?.id && v.created_by === me.profile.id);
+
   return (
     <Screen title="Account">
       <Card>
-        <T weight="700" size={16}>{me?.profile.name}</T>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <T weight="700" size={16}>{me?.profile.name}</T>
+          {isAdmin && (
+            <View style={{ backgroundColor: c.accent + '22', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }}>
+              <T size={12} weight="700" color={c.accent}>👑 Admin</T>
+            </View>
+          )}
+        </View>
         <T muted size={13}>{me?.partner ? `Saving with ${me.partner.name}` : 'Waiting for your partner to join'}</T>
         {v && <T size={13} muted>Invite code: <T weight="700" color={c.accent}>{v.invite_code}</T></T>}
       </Card>
@@ -55,12 +64,19 @@ export default function AccountScreen() {
 
       {v && (
         <Card>
-          <T weight="700" size={16}>Savings plan</T>
-          <Input label={`Savings goal (${v.currency})`} value={goal} onChangeText={setGoal} keyboardType="decimal-pad" />
-          <Input label="Monthly target for both of you" value={target} onChangeText={setTarget} keyboardType="decimal-pad" />
-          <Input label="Reminder day of the month (1 to 28)" value={day} onChangeText={setDay} keyboardType="number-pad" maxLength={2} />
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <T weight="700" size={16}>Savings plan</T>
+            {!isAdmin && <T size={12} muted>Managed by {me?.partner?.name ?? 'Admin'}</T>}
+          </View>
+          <Input label={`Savings goal (${v.currency})`} value={goal} onChangeText={setGoal} keyboardType="decimal-pad" editable={isAdmin} />
+          <Input label="Monthly target for both of you" value={target} onChangeText={setTarget} keyboardType="decimal-pad" editable={isAdmin} />
+          <Input label="Reminder day of the month (1 to 28)" value={day} onChangeText={setDay} keyboardType="number-pad" maxLength={2} editable={isAdmin} />
           <ErrorText msg={err} />
-          <Button label="Save plan" onPress={saveSettings} />
+          {isAdmin ? (
+            <Button label="Save plan" onPress={saveSettings} />
+          ) : (
+            <T size={12} muted style={{ textAlign: 'center' }}>Only the vault admin can edit the savings plan</T>
+          )}
           <Button label="Send reminder now" variant="ghost" onPress={remindNow} />
         </Card>
       )}
