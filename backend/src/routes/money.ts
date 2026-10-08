@@ -28,6 +28,7 @@ money.post('/savings', h(async (req, res) => {
 }));
 
 money.get('/savings', h(async (req, res) => {
+  res.setHeader('Cache-Control', 'private, max-age=5, stale-while-revalidate=30');
   const { data } = await admin.from('contributions').select('*')
     .eq('vault_id', req.vaultId!).order('created_at', { ascending: false }).limit(500);
   res.json(data ?? []);
@@ -46,6 +47,7 @@ money.post('/loans', h(async (req, res) => {
 }));
 
 money.get('/loans', h(async (req, res) => {
+  res.setHeader('Cache-Control', 'private, max-age=5, stale-while-revalidate=30');
   const { data } = await admin.from('loans').select('*')
     .eq('vault_id', req.vaultId!).order('created_at', { ascending: false });
   res.json(data ?? []);
@@ -64,12 +66,14 @@ money.post('/loans/:id/repay', h(async (req, res) => {
 
 /* ---------- Feed + notifications ---------- */
 money.get('/activity', h(async (req, res) => {
+  res.setHeader('Cache-Control', 'private, max-age=5, stale-while-revalidate=30');
   const { data } = await admin.from('activity').select('*')
     .eq('vault_id', req.vaultId!).order('created_at', { ascending: false }).limit(100);
   res.json(data ?? []);
 }));
 
 money.get('/notifications', h(async (req, res) => {
+  res.setHeader('Cache-Control', 'private, max-age=5, stale-while-revalidate=30');
   const { data } = await admin.from('notifications').select('*')
     .eq('user_id', req.userId).order('created_at', { ascending: false }).limit(50);
   res.json(data ?? []);

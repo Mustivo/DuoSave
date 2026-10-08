@@ -13,6 +13,7 @@ const makeCode = () => {
 };
 
 vault.get('/me', h(async (req, res) => {
+  res.setHeader('Cache-Control', 'private, max-age=5, stale-while-revalidate=30');
   const { data: profile } = await admin.from('profiles').select('id,name').eq('id', req.userId).single();
   if (!req.vaultId) return res.json({ profile, vault: null, partner: null });
   const { data: v } = await admin.from('vaults').select('*').eq('id', req.vaultId).single();
@@ -73,6 +74,7 @@ vault.patch('/vault', requireVault, h(async (req, res) => {
 }));
 
 vault.get('/vault/summary', requireVault, h(async (req, res) => {
+  res.setHeader('Cache-Control', 'private, max-age=5, stale-while-revalidate=30');
   const vid = req.vaultId!;
   const [{ data: bal }, { data: v }, { data: contribs }, { data: ms }, { data: loans }] = await Promise.all([
     admin.from('vault_balances').select('*').eq('vault_id', vid).single(),

@@ -107,15 +107,22 @@ export function Button({ label, onPress, variant = 'primary', loading, disabled 
   );
 }
 
-export function Input(props: TextInputProps & { label?: string }) {
+export function Input(props: TextInputProps & { label?: string; rightElement?: React.ReactNode }) {
   const { c } = useTheme();
-  const { label, style, ...rest } = props;
+  const { label, style, rightElement, ...rest } = props;
   return (
     <View style={{ gap: 6 }}>
       {label ? <T size={12} muted weight="600">{label}</T> : null}
-      <TextInput placeholderTextColor={c.muted} autoCapitalize="none"
-        style={[{ backgroundColor: c.cardAlt, color: c.text, borderColor: c.border, borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16 }, style]}
-        {...rest} />
+      <View style={{ position: 'relative', justifyContent: 'center' }}>
+        <TextInput placeholderTextColor={c.muted} autoCapitalize="none"
+          style={[{ backgroundColor: c.cardAlt, color: c.text, borderColor: c.border, borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16, paddingRight: rightElement ? 48 : 14 }, style]}
+          {...rest} />
+        {rightElement ? (
+          <View style={{ position: 'absolute', right: 12, top: 0, bottom: 0, justifyContent: 'center' }}>
+            {rightElement}
+          </View>
+        ) : null}
+      </View>
     </View>
   );
 }
