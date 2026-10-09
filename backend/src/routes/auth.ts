@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { admin, anon } from '../supabase';
 import { h, HttpError } from '../middleware/auth';
+import { sendPasswordResetOtpEmail } from '../services/mailer';
 
 export const auth = Router();
 
@@ -62,7 +63,47 @@ auth.post('/refresh', h(async (req, res) => {
 
 auth.post('/forgot-password', h(async (req, res) => {
   const { email } = z.object({ email: z.string().email() }).parse(req.body);
-  const { error } = await anon.auth.resetPasswordForEmail(email.trim());
-  if (error) throw new HttpError(400, error.message);
-  res.json({ ok: true, message: 'Password reset link sent to your email.' });
+  const targetEmail = email.trim().toLowerCase();
+
+  const { data, error } = await admin.auth.admin.generateLink({
+    type: 'recovery',
+    email: targetEmail,
+  });
+
+  if (error || !data.properties?.email_otp) {
+    throw new HttpError(400, error?.message ?? 'No account found with this email');
+  }
+
+  const otp = data.properties.email_otp;
+  await sendPasswordResetOtpEmail({ to: targetEmail, otp });
+
+  res.json({ ok: true, message: 'Verification code sent to your email.' });
+}));
+
+auth.post('/reset-password', h(async (req, res) => {
+  const b = z.object({
+    email: z.string().email(),
+    otp: z.string().min(4).max(12),
+    newPassword: z.string().min(6),
+  }).parse(req.body);
+
+  const targetEmail = b.email.trim().toLowerCase();
+
+  const { data: vData, error: vError } = await anon.auth.verifyOtp({
+    email: targetEmail,
+    token: b.otp.trim(),
+    type: 'recovery',
+  });
+
+  if (vError || !vData.user) {
+    throw new HttpError(400, vError?.message ?? 'Invalid or expired verification code');
+  }
+
+  const { error: uErr } = await admin.auth.admin.updateUserById(vData.user.id, {
+    password: b.newPassword,
+  });
+
+  if (uErr) throw new HttpError(400, uErr.message);
+
+  res.json({ ok: true, message: 'Password has been updated. You can now log in.' });
 }));

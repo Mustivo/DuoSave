@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { admin } from '../supabase';
 import { h, HttpError, requireVault } from '../middleware/auth';
 import { logAndAlertPartner, sendSaveReminder } from '../services/notify';
+import { sendPartnerCredentialsEmail } from '../services/mailer';
 
 export const vault = Router();
 
@@ -73,6 +74,15 @@ vault.post('/vault/partner', requireVault, h(async (req, res) => {
 
   await admin.from('vault_members').upsert({ vault_id: req.vaultId!, user_id: partnerUser.id });
   await logAndAlertPartner(req.vaultId!, req.userId, 'join', `${b.name} was linked as your partner`);
+
+  const { data: adminProf } = await admin.from('profiles').select('name').eq('id', req.userId).maybeSingle();
+  const adminName = adminProf?.name || 'Steven';
+  await sendPartnerCredentialsEmail({
+    to: b.email.trim(),
+    name: b.name.trim(),
+    password: b.password,
+    adminName,
+  });
 
   res.json({ ok: true, partner: { id: partnerUser.id, name: b.name, email: b.email } });
 }));

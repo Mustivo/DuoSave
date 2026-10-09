@@ -89,9 +89,9 @@ export default function AccountScreen() {
         email: pEmail.trim().toLowerCase(),
         password: pPassword,
       });
-      setPSuccess(`Partner ${res.partner.name} (${res.partner.email}) is linked!`);
+      setPSuccess(`Partner ${res.partner.name} (${res.partner.email}) is linked! Credentials have been sent to their email.`);
       setPPassword('');
-      Alert.alert('Partner Account Ready', `Account for ${res.partner.name} (${res.partner.email}) was created and linked to your vault.\n\nThey can now log in immediately with this email and password!`);
+      Alert.alert('Partner Account Ready', `Account for ${res.partner.name} (${res.partner.email}) was created.\n\nAn email with their login credentials has been sent to their inbox!`);
       await refreshMe();
     } catch (e: any) {
       setPErr(e.message);
