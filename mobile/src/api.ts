@@ -14,17 +14,23 @@ export async function saveSession(t: string, r: string) {
   await SecureStore.setItemAsync('token', t);
   await SecureStore.setItemAsync('refresh', r);
 }
+let onUnauthorizedCallback: (() => void) | null = null;
+export function setOnUnauthorized(cb: () => void) {
+  onUnauthorizedCallback = cb;
+}
+
 export async function clearSession() {
   token = null; refreshToken = null;
   clearApiCache();
-  await SecureStore.deleteItemAsync('token');
-  await SecureStore.deleteItemAsync('refresh');
+  await SecureStore.deleteItemAsync('token').catch(() => {});
+  await SecureStore.deleteItemAsync('refresh').catch(() => {});
+  onUnauthorizedCallback?.();
 }
 
 async function raw(method: string, path: string, body?: unknown) {
   const headers: Record<string, string> = {};
   if (body !== undefined) headers['Content-Type'] = 'application/json';
-  if (token) headers['Authorization'] = `Bearer ${token}`;
+  if (token && !path.startsWith('/auth')) headers['Authorization'] = `Bearer ${token}`;
 
   return await fetch(BASE + path, {
     method,

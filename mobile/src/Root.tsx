@@ -38,7 +38,9 @@ export default function Root() {
   return (
     <NavigationContainer theme={navTheme}>
       {bar}
-      {!me ? <AuthScreen /> : !me.vault ? <SetupScreen /> : (
+      {!me ? (
+        <AuthScreen />
+      ) : (
         <Tab.Navigator screenOptions={{ headerShown: false, tabBarActiveTintColor: c.accent, tabBarInactiveTintColor: c.muted }}>
           <Tab.Screen name="Savings" component={SavingsScreen} options={{ tabBarIcon: icon('wallet-outline', 'wallet') }} />
           <Tab.Screen name="Loans" component={LoansScreen} options={{ tabBarIcon: icon('swap-horizontal-outline', 'swap-horizontal') }} />

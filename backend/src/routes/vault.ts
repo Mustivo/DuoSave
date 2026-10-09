@@ -15,14 +15,66 @@ const makeCode = () => {
 vault.get('/me', h(async (req, res) => {
   res.setHeader('Cache-Control', 'private, max-age=5, stale-while-revalidate=30');
   const { data: profile } = await admin.from('profiles').select('id,name').eq('id', req.userId).single();
-  if (!req.vaultId) return res.json({ profile, vault: null, partner: null });
-  const { data: v } = await admin.from('vaults').select('*').eq('id', req.vaultId).single();
-  const { data: ms } = await admin.from('vault_members').select('user_id').eq('vault_id', req.vaultId);
+  let vId = req.vaultId;
+  if (!vId) {
+    const { data: defaultVault } = await admin.from('vaults').select('*').order('created_at', { ascending: true }).limit(1).maybeSingle();
+    if (defaultVault) {
+      await admin.from('vault_members').upsert({ vault_id: defaultVault.id, user_id: req.userId });
+      vId = defaultVault.id;
+    }
+  }
+  if (!vId) return res.json({ profile, vault: null, partner: null });
+  const { data: v } = await admin.from('vaults').select('*').eq('id', vId).single();
+  const { data: ms } = await admin.from('vault_members').select('user_id').eq('vault_id', vId);
   const partnerId = (ms ?? []).map((m) => m.user_id).find((id) => id !== req.userId);
   const { data: partner } = partnerId
     ? await admin.from('profiles').select('id,name').eq('id', partnerId).single()
     : { data: null };
-  res.json({ profile, vault: v, partner });
+  const isSteven = req.userEmail?.toLowerCase().includes('stevenmwizerwa') || req.userId === 'c0e5aa93-e6ab-4a6a-971e-bcfc8c4980b8' || (v && v.created_by === req.userId);
+  res.json({ profile: { ...profile, email: req.userEmail }, vault: v, partner, isAdmin: !!isSteven });
+}));
+
+vault.post('/vault/partner', requireVault, h(async (req, res) => {
+  const isSteven = req.userEmail?.toLowerCase().includes('stevenmwizerwa') || req.userId === 'c0e5aa93-e6ab-4a6a-971e-bcfc8c4980b8';
+  const { data: v } = await admin.from('vaults').select('*').eq('id', req.vaultId!).single();
+  if (!isSteven && v.created_by !== req.userId) {
+    throw new HttpError(403, 'Only Steven (Admin) can create or manage the partner account');
+  }
+
+  const b = z.object({
+    name: z.string().min(1).max(40),
+    email: z.string().email(),
+    password: z.string().min(6),
+  }).parse(req.body);
+
+  const { data: existingUsers } = await admin.auth.admin.listUsers();
+  let partnerUser = (existingUsers.users ?? []).find((u) => u.email?.toLowerCase() === b.email.trim().toLowerCase());
+
+  if (!partnerUser) {
+    const { data: created, error } = await admin.auth.admin.createUser({
+      email: b.email.trim(),
+      password: b.password,
+      email_confirm: true,
+    });
+    if (error || !created.user) throw new HttpError(400, error?.message ?? 'Could not create partner account');
+    partnerUser = created.user;
+  } else {
+    await admin.auth.admin.updateUserById(partnerUser.id, { password: b.password });
+  }
+
+  await admin.from('profiles').upsert({ id: partnerUser.id, name: b.name.trim() });
+
+  const { data: members } = await admin.from('vault_members').select('user_id').eq('vault_id', req.vaultId!);
+  for (const m of members ?? []) {
+    if (m.user_id !== req.userId && m.user_id !== partnerUser.id) {
+      await admin.from('vault_members').delete().eq('vault_id', req.vaultId!).eq('user_id', m.user_id);
+    }
+  }
+
+  await admin.from('vault_members').upsert({ vault_id: req.vaultId!, user_id: partnerUser.id });
+  await logAndAlertPartner(req.vaultId!, req.userId, 'join', `${b.name} was linked as your partner`);
+
+  res.json({ ok: true, partner: { id: partnerUser.id, name: b.name, email: b.email } });
 }));
 
 vault.put('/me/push-token', h(async (req, res) => {
@@ -59,7 +111,8 @@ vault.post('/vault/join', h(async (req, res) => {
 
 vault.patch('/vault', requireVault, h(async (req, res) => {
   const { data: currentVault } = await admin.from('vaults').select('created_by').eq('id', req.vaultId!).single();
-  if (currentVault?.created_by !== req.userId) {
+  const isSteven = req.userEmail?.toLowerCase().includes('stevenmwizerwa') || req.userId === 'c0e5aa93-e6ab-4a6a-971e-bcfc8c4980b8';
+  if (!isSteven && currentVault?.created_by !== req.userId) {
     throw new HttpError(403, 'Only the vault admin can edit the savings plan');
   }
   const b = z.object({

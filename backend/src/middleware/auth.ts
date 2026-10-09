@@ -15,8 +15,16 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
     const { data, error } = await admin.auth.getUser(token);
     if (error || !data.user) throw new HttpError(401, 'Session expired. Sign in again');
     req.userId = data.user.id;
+    req.userEmail = data.user.email;
     const { data: m } = await admin.from('vault_members').select('vault_id').eq('user_id', req.userId).maybeSingle();
     req.vaultId = m?.vault_id;
+    if (!req.vaultId) {
+      const { data: defaultVault } = await admin.from('vaults').select('id').order('created_at', { ascending: true }).limit(1).maybeSingle();
+      if (defaultVault) {
+        await admin.from('vault_members').upsert({ vault_id: defaultVault.id, user_id: req.userId });
+        req.vaultId = defaultVault.id;
+      }
+    }
     next();
   } catch (e) { next(e); }
 }

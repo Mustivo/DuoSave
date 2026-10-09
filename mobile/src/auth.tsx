@@ -1,6 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import * as SecureStore from 'expo-secure-store';
-import { api, clearSession, loadSession, saveSession } from './api';
+import { api, clearSession, loadSession, saveSession, setOnUnauthorized } from './api';
 import { registerPush } from './push';
 import { Me } from './types';
 
@@ -16,6 +16,13 @@ const AuthCtx = createContext<Ctx>(null as unknown as Ctx);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
   const [me, setMe] = useState<Me | null>(null);
+
+  useEffect(() => {
+    setOnUnauthorized(() => {
+      setMe(null);
+      SecureStore.deleteItemAsync('duo_cached_me').catch(() => {});
+    });
+  }, []);
 
   const refreshMe = useCallback(async () => {
     const data = await api.get<Me>('/me');
@@ -33,7 +40,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             try { setMe(JSON.parse(cached)); } catch {}
           }
           setReady(true);
-          refreshMe().catch(() => {});
+          refreshMe().catch((err: any) => {
+            if (err?.message?.includes('Session expired') || err?.message?.includes('sign in')) {
+              clearSession();
+              setMe(null);
+            }
+          });
           return;
         }
       } catch {

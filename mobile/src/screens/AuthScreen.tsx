@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, View, Image, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as SecureStore from 'expo-secure-store';
 import { useAuth } from '../auth';
 import { useTheme } from '../theme';
 import { api } from '../api';
@@ -19,6 +20,12 @@ export default function AuthScreen() {
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  useEffect(() => {
+    SecureStore.getItemAsync('duo_last_email').then((saved) => {
+      if (saved && !email) setEmail(saved);
+    }).catch(() => {});
+  }, []);
+
   const submit = async () => {
     if (mode === 'register' && !name.trim()) { setErr('Please enter your name'); return; }
     if (!email.trim()) { setErr('Please enter your email'); return; }
@@ -31,8 +38,10 @@ export default function AuthScreen() {
         setMsg('Password reset link sent! Please check your email.');
       } else if (mode === 'register') {
         await signUp(name.trim(), email.trim(), pw);
+        SecureStore.setItemAsync('duo_last_email', email.trim()).catch(() => {});
       } else {
         await signIn(email.trim(), pw);
+        SecureStore.setItemAsync('duo_last_email', email.trim()).catch(() => {});
       }
     } catch (e: any) {
       setErr(e.message);

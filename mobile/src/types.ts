@@ -1,10 +1,10 @@
-export type Profile = { id: string; name: string };
+export type Profile = { id: string; name: string; email?: string };
 export type Vault = {
   id: string; name: string; invite_code: string; currency: string;
   savings_goal: number; monthly_target: number; reminder_day: number;
   created_by?: string;
 };
-export type Me = { profile: Profile; vault: Vault | null; partner: Profile | null };
+export type Me = { profile: Profile; vault: Vault | null; partner: Profile | null; isAdmin?: boolean };
 export type Member = { id: string; name: string; total: number; thisMonth: number; owed: number };
 export type Summary = {
   vault: Vault; totalDeposited: number; loanedOut: number; available: number; members: Member[];
