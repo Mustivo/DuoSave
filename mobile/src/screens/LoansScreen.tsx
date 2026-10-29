@@ -17,7 +17,7 @@ export default function LoansScreen() {
   const [repay, setRepay] = useState<Record<string, string>>({});
   const [err, setErr] = useState<string | null>(null); const [busy, setBusy] = useState(false);
 
-  const cur = data?.summary.vault.currency ?? 'USD';
+  const cur = data?.summary.vault.currency ?? 'RWF';
   const nameOf = (id: string) => data?.summary.members.find((m) => m.id === id)?.name ?? 'Partner';
 
   const take = () => {

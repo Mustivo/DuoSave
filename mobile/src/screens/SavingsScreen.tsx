@@ -25,7 +25,7 @@ export default function SavingsScreen() {
     setBusy(false);
   };
 
-  const s = data?.summary; const cur = s?.vault.currency ?? 'USD';
+  const s = data?.summary; const cur = s?.vault.currency ?? 'RWF';
   const colors = [c.accent, c.blue];
   const monthTotal = s?.members.reduce((t, m) => t + m.thisMonth, 0) ?? 0;
 

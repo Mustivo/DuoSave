@@ -13,7 +13,7 @@ export default function AnalyticsScreen() {
     const [summary, list] = await Promise.all([api.get<Summary>('/vault/summary'), api.get<Contribution[]>('/savings')]);
     return { summary, list };
   });
-  const cur = data?.summary.vault.currency ?? 'USD';
+  const cur = data?.summary.vault.currency ?? 'RWF';
   const colors = [c.accent, c.blue];
   const members = data?.summary.members ?? [];
 

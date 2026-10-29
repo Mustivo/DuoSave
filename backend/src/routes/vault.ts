@@ -87,10 +87,10 @@ vault.post('/vault', h(async (req, res) => {
   if (req.vaultId) throw new HttpError(400, 'You already belong to a vault');
   const b = z.object({
     name: z.string().min(1).max(40).default('Our Vault'),
-    currency: z.string().length(3).default('USD'),
+    currency: z.string().length(3).default('RWF'),
   }).parse(req.body);
   const { data: v, error } = await admin.from('vaults')
-    .insert({ ...b, invite_code: makeCode(), created_by: req.userId }).select().single();
+    .insert({ ...b, monthly_target: 6000, invite_code: makeCode(), created_by: req.userId }).select().single();
   if (error) throw new HttpError(500, error.message);
   await admin.from('vault_members').insert({ vault_id: v.id, user_id: req.userId });
   res.json(v);

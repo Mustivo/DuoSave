@@ -5,7 +5,7 @@ import { Button, Card, ErrorText, Input, Screen, T } from '../ui';
 
 export default function SetupScreen() {
   const { refreshMe, signOut } = useAuth();
-  const [name, setName] = useState('Our Vault'); const [cur, setCur] = useState('USD');
+  const [name, setName] = useState('Our Savings'); const [cur, setCur] = useState('RWF');
   const [code, setCode] = useState('');
   const [err, setErr] = useState<string | null>(null); const [busy, setBusy] = useState(false);
 

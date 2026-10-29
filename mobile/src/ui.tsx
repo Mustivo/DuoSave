@@ -9,7 +9,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from './theme';
 import { useAuth } from './auth';
 
-export const money = (n: number, cur = 'USD') => {
+export const money = (n: number, cur = 'RWF') => {
   try { return new Intl.NumberFormat('en-US', { style: 'currency', currency: cur }).format(n); }
   catch { return `${cur} ${n.toFixed(2)}`; }
 };

@@ -13,6 +13,7 @@ import LoansScreen from './screens/LoansScreen';
 import AnalyticsScreen from './screens/AnalyticsScreen';
 import ActivityScreen from './screens/ActivityScreen';
 import AccountScreen from './screens/AccountScreen';
+import SavingsRulesScreen from './screens/SavingsRulesScreen';
 
 const Tab = createBottomTabNavigator();
 const icon = (name: keyof typeof Ionicons.glyphMap, focused: keyof typeof Ionicons.glyphMap) =>
@@ -50,6 +51,7 @@ export default function Root() {
               <Tab.Screen name="Loans" component={LoansScreen} options={{ tabBarIcon: icon('swap-horizontal-outline', 'swap-horizontal') }} />
               <Tab.Screen name="Analytics" component={AnalyticsScreen} options={{ tabBarIcon: icon('stats-chart-outline', 'stats-chart') }} />
               <Tab.Screen name="Activity" component={ActivityScreen} options={{ tabBarIcon: icon('notifications-outline', 'notifications') }} />
+              <Tab.Screen name="Rules" component={SavingsRulesScreen} options={{ tabBarIcon: icon('document-text-outline', 'document-text') }} />
               <Tab.Screen name="Account" component={AccountScreen} options={{ tabBarIcon: icon('person-outline', 'person') }} />
             </>
           )}

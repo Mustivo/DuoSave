@@ -12,9 +12,9 @@ create table vaults (
   id uuid primary key default gen_random_uuid(),
   name text not null default 'Our Vault',
   invite_code text unique not null,
-  currency text not null default 'USD',
+  currency text not null default 'RWF',
   savings_goal numeric(12,2) not null default 0,
-  monthly_target numeric(12,2) not null default 0,   -- combined, per month
+  monthly_target numeric(12,2) not null default 6000,   -- combined, per month
   reminder_day int not null default 1 check (reminder_day between 1 and 28),
   created_by uuid references profiles(id),
   created_at timestamptz not null default now()
