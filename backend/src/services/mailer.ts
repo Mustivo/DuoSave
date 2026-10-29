@@ -68,6 +68,37 @@ export async function sendPartnerCredentialsEmail(params: {
   }
 }
 
+/** Sends a one-time code so a newly invited partner chooses their own password. */
+export async function sendPartnerSetupOtpEmail(params: {
+  to: string;
+  name: string;
+  otp: string;
+  adminName?: string;
+}) {
+  const { to, name, otp, adminName = 'your partner' } = params;
+  const transporter = getTransporter();
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 520px; margin: 0 auto; padding: 24px;">
+      <h2>Welcome to DuoSave</h2>
+      <p>Hi ${name}, ${adminName} created a DuoSave account for you.</p>
+      <p>Open DuoSave, choose <strong>Forgot password?</strong>, and enter this one-time code to choose your own password:</p>
+      <p style="font-family: monospace; font-size: 28px; font-weight: bold; letter-spacing: 6px;">${otp}</p>
+      <p>This code expires in 15 minutes. Do not share it with anyone.</p>
+    </div>`;
+
+  if (!transporter) {
+    console.log(`[Mailer] SMTP is not configured; partner password setup code was generated for ${to}.`);
+    return { sent: false, mock: true };
+  }
+  try {
+    await transporter.sendMail({ from: `"DuoSave" <${user}>`, to, subject: 'Set up your DuoSave password', html });
+    return { sent: true };
+  } catch (err: any) {
+    console.warn(`[Mailer] Failed to send partner setup email to ${to}:`, err.message);
+    return { sent: false, error: err.message };
+  }
+}
+
 /** Sends a verification OTP code for password reset */
 export async function sendPasswordResetOtpEmail(params: {
   to: string;

@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { admin } from '../supabase';
 import { h, HttpError, requireVault } from '../middleware/auth';
 import { logAndAlertPartner, sendSaveReminder } from '../services/notify';
-import { sendPartnerCredentialsEmail } from '../services/mailer';
+import { sendPartnerSetupOtpEmail } from '../services/mailer';
 
 export const vault = Router();
 
@@ -17,13 +17,6 @@ vault.get('/me', h(async (req, res) => {
   res.setHeader('Cache-Control', 'private, max-age=5, stale-while-revalidate=30');
   const { data: profile } = await admin.from('profiles').select('id,name').eq('id', req.userId).single();
   let vId = req.vaultId;
-  if (!vId) {
-    const { data: defaultVault } = await admin.from('vaults').select('*').order('created_at', { ascending: true }).limit(1).maybeSingle();
-    if (defaultVault) {
-      await admin.from('vault_members').upsert({ vault_id: defaultVault.id, user_id: req.userId });
-      vId = defaultVault.id;
-    }
-  }
   if (!vId) return res.json({ profile, vault: null, partner: null });
   const { data: v } = await admin.from('vaults').select('*').eq('id', vId).single();
   const { data: ms } = await admin.from('vault_members').select('user_id').eq('vault_id', vId);
@@ -31,37 +24,30 @@ vault.get('/me', h(async (req, res) => {
   const { data: partner } = partnerId
     ? await admin.from('profiles').select('id,name').eq('id', partnerId).single()
     : { data: null };
-  const isSteven = req.userEmail?.toLowerCase().includes('stevenmwizerwa') || req.userId === 'c0e5aa93-e6ab-4a6a-971e-bcfc8c4980b8' || (v && v.created_by === req.userId);
-  res.json({ profile: { ...profile, email: req.userEmail }, vault: v, partner, isAdmin: !!isSteven });
+  res.json({ profile: { ...profile, email: req.userEmail }, vault: v, partner, isAdmin: v?.created_by === req.userId });
 }));
 
 vault.post('/vault/partner', requireVault, h(async (req, res) => {
-  const isSteven = req.userEmail?.toLowerCase().includes('stevenmwizerwa') || req.userId === 'c0e5aa93-e6ab-4a6a-971e-bcfc8c4980b8';
   const { data: v } = await admin.from('vaults').select('*').eq('id', req.vaultId!).single();
-  if (!isSteven && v.created_by !== req.userId) {
-    throw new HttpError(403, 'Only Steven (Admin) can create or manage the partner account');
+  if (v?.created_by !== req.userId) {
+    throw new HttpError(403, 'Only the vault owner can create or manage the partner account');
   }
 
   const b = z.object({
     name: z.string().min(1).max(40),
     email: z.string().email(),
-    password: z.string().min(6),
   }).parse(req.body);
 
-  const { data: existingUsers } = await admin.auth.admin.listUsers();
-  let partnerUser = (existingUsers.users ?? []).find((u) => u.email?.toLowerCase() === b.email.trim().toLowerCase());
-
-  if (!partnerUser) {
-    const { data: created, error } = await admin.auth.admin.createUser({
-      email: b.email.trim(),
-      password: b.password,
-      email_confirm: true,
-    });
-    if (error || !created.user) throw new HttpError(400, error?.message ?? 'Could not create partner account');
-    partnerUser = created.user;
-  } else {
-    await admin.auth.admin.updateUserById(partnerUser.id, { password: b.password });
+  const email = b.email.trim().toLowerCase();
+  const { data: created, error } = await admin.auth.admin.createUser({
+    email,
+    password: randomBytes(32).toString('base64url'),
+    email_confirm: true,
+  });
+  if (error || !created.user) {
+    throw new HttpError(400, 'This email is already registered. Ask your partner to sign in and join using the invite code.');
   }
+  const partnerUser = created.user;
 
   await admin.from('profiles').upsert({ id: partnerUser.id, name: b.name.trim() });
 
@@ -76,11 +62,15 @@ vault.post('/vault/partner', requireVault, h(async (req, res) => {
   await logAndAlertPartner(req.vaultId!, req.userId, 'join', `${b.name} was linked as your partner`);
 
   const { data: adminProf } = await admin.from('profiles').select('name').eq('id', req.userId).maybeSingle();
-  const adminName = adminProf?.name || 'Steven';
-  await sendPartnerCredentialsEmail({
-    to: b.email.trim(),
+  const adminName = adminProf?.name || 'your partner';
+  const { data: recovery, error: recoveryError } = await admin.auth.admin.generateLink({ type: 'recovery', email });
+  if (recoveryError || !recovery.properties?.email_otp) {
+    throw new HttpError(500, 'Could not prepare the partner setup email');
+  }
+  await sendPartnerSetupOtpEmail({
+    to: email,
     name: b.name.trim(),
-    password: b.password,
+    otp: recovery.properties.email_otp,
     adminName,
   });
 
@@ -121,8 +111,7 @@ vault.post('/vault/join', h(async (req, res) => {
 
 vault.patch('/vault', requireVault, h(async (req, res) => {
   const { data: currentVault } = await admin.from('vaults').select('created_by').eq('id', req.vaultId!).single();
-  const isSteven = req.userEmail?.toLowerCase().includes('stevenmwizerwa') || req.userId === 'c0e5aa93-e6ab-4a6a-971e-bcfc8c4980b8';
-  if (!isSteven && currentVault?.created_by !== req.userId) {
+  if (currentVault?.created_by !== req.userId) {
     throw new HttpError(403, 'Only the vault admin can edit the savings plan');
   }
   const b = z.object({

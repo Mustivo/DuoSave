@@ -6,7 +6,8 @@ import { router } from './routes';
 import { startReminders, checkAndSendReminders } from './services/reminders';
 
 const app = express();
-app.use(cors());
+const corsOrigin = process.env.CORS_ORIGIN?.split(',').map((origin) => origin.trim()).filter(Boolean);
+app.use(cors({ origin: corsOrigin?.length ? corsOrigin : false }));
 app.use(express.json());
 
 app.use((req, res, next) => {
@@ -17,6 +18,8 @@ app.use((req, res, next) => {
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
 app.get('/api/cron/reminders', async (_req, res) => {
+  const secret = process.env.CRON_SECRET;
+  if (!secret || _req.headers.authorization !== `Bearer ${secret}`) return res.sendStatus(401);
   try {
     const reminded = await checkAndSendReminders();
     res.json({ ok: true, reminded });

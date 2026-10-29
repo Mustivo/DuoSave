@@ -14,10 +14,9 @@ export default function AccountScreen() {
   const [day, setDay] = useState('');
   const [err, setErr] = useState<string | null>(null);
 
-  // Partner account management for Steven (Master Admin)
+  // Partner account management for the vault owner.
   const [pName, setPName] = useState('');
   const [pEmail, setPEmail] = useState('');
-  const [pPassword, setPPassword] = useState('');
   const [pBusy, setPBusy] = useState(false);
   const [pErr, setPErr] = useState<string | null>(null);
   const [pSuccess, setPSuccess] = useState<string | null>(null);
@@ -59,13 +58,7 @@ export default function AccountScreen() {
     }
   };
 
-  const isSteven = !!(
-    me?.isAdmin ||
-    me?.profile?.id === 'c0e5aa93-e6ab-4a6a-971e-bcfc8c4980b8' ||
-    me?.profile?.name?.toLowerCase().includes('steven') ||
-    me?.profile?.email?.toLowerCase().includes('stevenmwizerwa') ||
-    (v && me?.profile?.id && v.created_by === me.profile.id)
-  );
+  const isVaultOwner = !!(v && me?.profile?.id && v.created_by === me.profile.id);
 
   const handleSavePartner = async () => {
     if (!pName.trim()) {
@@ -76,10 +69,6 @@ export default function AccountScreen() {
       setPErr('Enter a valid email address');
       return;
     }
-    if (pPassword.length < 6) {
-      setPErr('Password must be at least 6 characters');
-      return;
-    }
     setPErr(null);
     setPSuccess(null);
     setPBusy(true);
@@ -87,11 +76,9 @@ export default function AccountScreen() {
       const res = await api.post<{ ok: boolean; partner: { id: string; name: string; email: string } }>('/vault/partner', {
         name: pName.trim(),
         email: pEmail.trim().toLowerCase(),
-        password: pPassword,
       });
-      setPSuccess(`Partner ${res.partner.name} (${res.partner.email}) is linked! Credentials have been sent to their email.`);
-      setPPassword('');
-      Alert.alert('Partner Account Ready', `Account for ${res.partner.name} (${res.partner.email}) was created.\n\nAn email with their login credentials has been sent to their inbox!`);
+      setPSuccess(`Partner ${res.partner.name} (${res.partner.email}) is linked. A secure password-setup code was emailed to them.`);
+      Alert.alert('Partner Account Ready', `Account for ${res.partner.name} (${res.partner.email}) was created. They will receive a secure code to choose their own password.`);
       await refreshMe();
     } catch (e: any) {
       setPErr(e.message);
@@ -105,7 +92,7 @@ export default function AccountScreen() {
       <Card>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <T weight="700" size={16}>{me?.profile.name}</T>
-          {isSteven && (
+          {isVaultOwner && (
             <View style={{ backgroundColor: c.accent + '22', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }}>
               <T size={12} weight="700" color={c.accent}>👑 Master Admin</T>
             </View>
@@ -117,7 +104,7 @@ export default function AccountScreen() {
       </Card>
 
       {/* Admin Partner Creation and Management Card */}
-      {isSteven && (
+      {isVaultOwner && (
         <Card>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
             <T weight="700" size={16}>Manage Partner Account</T>
@@ -126,7 +113,7 @@ export default function AccountScreen() {
             </View>
           </View>
           <T size={13} muted>
-            As Master Admin, you have full control to create or update your partner's login account directly.
+            Create an account for your partner. They will receive a code to choose their own password.
           </T>
           {me?.partner && (
             <View style={{ backgroundColor: c.cardAlt, padding: 10, borderRadius: 10 }}>
@@ -135,10 +122,9 @@ export default function AccountScreen() {
           )}
           <Input label="Partner Name" placeholder="e.g. Partner Name" value={pName} onChangeText={setPName} />
           <Input label="Partner Email" placeholder="partner@email.com" keyboardType="email-address" autoCapitalize="none" value={pEmail} onChangeText={setPEmail} />
-          <Input label="Partner Password (min 6 chars)" placeholder="Set login password" secureTextEntry value={pPassword} onChangeText={setPPassword} />
           {pSuccess && <T size={13} color={c.accent} weight="600">{pSuccess}</T>}
           <ErrorText msg={pErr} />
-          <Button label={pBusy ? 'Saving...' : me?.partner ? 'Update / Set Partner Account' : 'Create & Link Partner'} onPress={handleSavePartner} loading={pBusy} />
+          <Button label={pBusy ? 'Saving...' : 'Create & Link Partner'} onPress={handleSavePartner} loading={pBusy} />
         </Card>
       )}
 
@@ -160,16 +146,16 @@ export default function AccountScreen() {
         <Card>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
             <T weight="700" size={16}>Savings plan</T>
-            {!isSteven && <T size={12} muted>Managed by {me?.partner?.name ?? 'Admin'}</T>}
+            {!isVaultOwner && <T size={12} muted>Managed by {me?.partner?.name ?? 'the vault owner'}</T>}
           </View>
-          <Input label={`Savings goal (${v.currency})`} value={goal} onChangeText={setGoal} keyboardType="decimal-pad" editable={isSteven} />
-          <Input label="Monthly target for both of you" value={target} onChangeText={setTarget} keyboardType="decimal-pad" editable={isSteven} />
-          <Input label="Reminder day of the month (1 to 28)" value={day} onChangeText={setDay} keyboardType="number-pad" maxLength={2} editable={isSteven} />
+          <Input label={`Savings goal (${v.currency})`} value={goal} onChangeText={setGoal} keyboardType="decimal-pad" editable={isVaultOwner} />
+          <Input label="Monthly target for both of you" value={target} onChangeText={setTarget} keyboardType="decimal-pad" editable={isVaultOwner} />
+          <Input label="Reminder day of the month (1 to 28)" value={day} onChangeText={setDay} keyboardType="number-pad" maxLength={2} editable={isVaultOwner} />
           <ErrorText msg={err} />
-          {isSteven ? (
+          {isVaultOwner ? (
             <Button label="Save plan" onPress={saveSettings} />
           ) : (
-            <T size={12} muted style={{ textAlign: 'center' }}>Only the master admin can edit the savings plan</T>
+            <T size={12} muted style={{ textAlign: 'center' }}>Only the vault owner can edit the savings plan</T>
           )}
           <Button label="Send reminder now" variant="ghost" onPress={remindNow} />
         </Card>

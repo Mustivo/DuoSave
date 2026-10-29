@@ -10,15 +10,8 @@ const creds = z.object({ email: z.string().email(), password: z.string().min(6) 
 
 async function fetchMe(userId: string, email?: string) {
   const { data: profile } = await admin.from('profiles').select('id,name').eq('id', userId).single();
-  let { data: m } = await admin.from('vault_members').select('vault_id').eq('user_id', userId).maybeSingle();
-  let vId = m?.vault_id;
-  if (!vId) {
-    const { data: defaultVault } = await admin.from('vaults').select('*').order('created_at', { ascending: true }).limit(1).maybeSingle();
-    if (defaultVault) {
-      await admin.from('vault_members').upsert({ vault_id: defaultVault.id, user_id: userId });
-      vId = defaultVault.id;
-    }
-  }
+  const { data: m } = await admin.from('vault_members').select('vault_id').eq('user_id', userId).maybeSingle();
+  const vId = m?.vault_id;
   if (!vId) return { profile: { ...profile, email }, vault: null, partner: null, isAdmin: false };
   const [{ data: v }, { data: ms }] = await Promise.all([
     admin.from('vaults').select('*').eq('id', vId).single(),
@@ -28,8 +21,7 @@ async function fetchMe(userId: string, email?: string) {
   const { data: partner } = partnerId
     ? await admin.from('profiles').select('id,name').eq('id', partnerId).single()
     : { data: null };
-  const isSteven = email?.toLowerCase().includes('stevenmwizerwa') || userId === 'c0e5aa93-e6ab-4a6a-971e-bcfc8c4980b8' || (v && v.created_by === userId);
-  return { profile: { ...profile, email }, vault: v, partner, isAdmin: !!isSteven };
+  return { profile: { ...profile, email }, vault: v, partner, isAdmin: v?.created_by === userId };
 }
 
 auth.post('/register', h(async (req, res) => {

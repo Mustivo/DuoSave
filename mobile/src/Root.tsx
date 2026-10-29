@@ -42,11 +42,17 @@ export default function Root() {
         <AuthScreen />
       ) : (
         <Tab.Navigator screenOptions={{ headerShown: false, tabBarActiveTintColor: c.accent, tabBarInactiveTintColor: c.muted }}>
-          <Tab.Screen name="Savings" component={SavingsScreen} options={{ tabBarIcon: icon('wallet-outline', 'wallet') }} />
-          <Tab.Screen name="Loans" component={LoansScreen} options={{ tabBarIcon: icon('swap-horizontal-outline', 'swap-horizontal') }} />
-          <Tab.Screen name="Analytics" component={AnalyticsScreen} options={{ tabBarIcon: icon('stats-chart-outline', 'stats-chart') }} />
-          <Tab.Screen name="Activity" component={ActivityScreen} options={{ tabBarIcon: icon('notifications-outline', 'notifications') }} />
-          <Tab.Screen name="Account" component={AccountScreen} options={{ tabBarIcon: icon('person-outline', 'person') }} />
+          {!me.vault ? (
+            <Tab.Screen name="Setup" component={SetupScreen} options={{ tabBarIcon: icon('wallet-outline', 'wallet') }} />
+          ) : (
+            <>
+              <Tab.Screen name="Savings" component={SavingsScreen} options={{ tabBarIcon: icon('wallet-outline', 'wallet') }} />
+              <Tab.Screen name="Loans" component={LoansScreen} options={{ tabBarIcon: icon('swap-horizontal-outline', 'swap-horizontal') }} />
+              <Tab.Screen name="Analytics" component={AnalyticsScreen} options={{ tabBarIcon: icon('stats-chart-outline', 'stats-chart') }} />
+              <Tab.Screen name="Activity" component={ActivityScreen} options={{ tabBarIcon: icon('notifications-outline', 'notifications') }} />
+              <Tab.Screen name="Account" component={AccountScreen} options={{ tabBarIcon: icon('person-outline', 'person') }} />
+            </>
+          )}
         </Tab.Navigator>
       )}
     </NavigationContainer>
