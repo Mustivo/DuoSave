@@ -7,9 +7,9 @@ import * as SecureStore from 'expo-secure-store';
 import { useAuth } from '../auth';
 import { useTheme } from '../theme';
 import { api } from '../api';
-import { Button, CopyrightFooter, ErrorText, Input, T } from '../ui';
+import { Button, Card, CopyrightFooter, ErrorText, Input, T } from '../ui';
 
-type AuthMode = 'login' | 'forgot' | 'reset-otp';
+type AuthMode = 'login' | 'forgot-choice' | 'enter-code' | 'request-code';
 
 export default function AuthScreen() {
   const { c, isDark } = useTheme();
@@ -37,9 +37,9 @@ export default function AuthScreen() {
     }
     setBusy(true); setErr(null); setMsg(null);
     try {
-      await api.post('/auth/forgot-password', { email: email.trim() });
-      setMode('reset-otp');
-      setMsg(`A verification code was sent to ${email.trim()}. Enter it below with your new password.`);
+      await api.post('/auth/forgot-password', { email: email.trim().toLowerCase() });
+      setMode('enter-code');
+      setMsg(`Verification code sent to ${email.trim()}. Enter it below with your new password.`);
     } catch (e: any) {
       setErr(e.message);
     } finally {
@@ -48,6 +48,7 @@ export default function AuthScreen() {
   };
 
   const submitResetOtp = async () => {
+    if (!email.trim() || !email.includes('@')) { setErr('Please enter your email'); return; }
     if (!otp.trim()) { setErr('Please enter the verification code'); return; }
     if (!pw || pw.length < 6) { setErr('New password must be at least 6 characters'); return; }
     if (pw !== confirmPw) { setErr('Passwords do not match'); return; }
@@ -55,7 +56,7 @@ export default function AuthScreen() {
     setBusy(true); setErr(null); setMsg(null);
     try {
       await api.post('/auth/reset-password', {
-        email: email.trim(),
+        email: email.trim().toLowerCase(),
         otp: otp.trim(),
         newPassword: pw,
       });
@@ -64,7 +65,7 @@ export default function AuthScreen() {
       setConfirmPw('');
       setOtp('');
       setMsg('Password updated successfully! You can now log in.');
-      Alert.alert('Password Reset', 'Your password has been updated. Please sign in.');
+      Alert.alert('Password Updated', 'Your new password is set. Please sign in.');
     } catch (e: any) {
       setErr(e.message);
     } finally {
@@ -72,23 +73,14 @@ export default function AuthScreen() {
     }
   };
 
-  const submit = async () => {
-    if (mode === 'forgot') {
-      await sendOtp();
-      return;
-    }
-    if (mode === 'reset-otp') {
-      await submitResetOtp();
-      return;
-    }
-
+  const submitLogin = async () => {
     if (!email.trim()) { setErr('Please enter your email'); return; }
     if (!pw) { setErr('Please enter your password'); return; }
 
     setBusy(true); setErr(null); setMsg(null);
     try {
-      await signIn(email.trim(), pw);
-      SecureStore.setItemAsync('duo_last_email', email.trim()).catch(() => {});
+      await signIn(email.trim().toLowerCase(), pw);
+      SecureStore.setItemAsync('duo_last_email', email.trim().toLowerCase()).catch(() => {});
     } catch (e: any) {
       setErr(e.message);
     } finally {
@@ -107,123 +99,225 @@ export default function AuthScreen() {
           contentContainerStyle={{ padding: 24, paddingBottom: 60, gap: 14 }}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
-          <View style={{ gap: 8, marginTop: 24, marginBottom: 16, alignItems: 'center' }}>
+          
+          {/* Centered Logo Header */}
+          <View style={{ gap: 8, marginTop: 20, marginBottom: 16, alignItems: 'center' }}>
             <Image source={require('../../assets/icon.png')} style={{ width: 84, height: 84, borderRadius: 20 }} />
             <T size={32} weight="800" style={{ textAlign: 'center' }}>DuoSave</T>
             <T muted style={{ textAlign: 'center', maxWidth: 300 }}>
-              {mode === 'forgot'
-                ? 'Enter your email to receive a password reset verification code.'
-                : mode === 'reset-otp'
-                ? 'Enter the code sent to your email to set a new password.'
-                : 'Sign in to access your shared savings vault.'}
+              {mode === 'login' && 'Sign in to access your shared savings vault.'}
+              {mode === 'forgot-choice' && 'Choose an option to verify your code or reset your password.'}
+              {mode === 'enter-code' && 'Enter the verification code from your email and set your password.'}
+              {mode === 'request-code' && 'Enter your email to receive a password reset code.'}
             </T>
           </View>
 
-          <Input
-            label="Email"
-            placeholder="your-email@example.com"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            editable={mode !== 'reset-otp'}
-          />
+          {/* MODE 1: LOGIN */}
+          {mode === 'login' && (
+            <>
+              <Input
+                label="Email"
+                placeholder="your-email@example.com"
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
 
-          {mode === 'reset-otp' && (
-            <Input
-              label="Verification Code (OTP from email)"
-              placeholder="e.g. 123456"
-              value={otp}
-              onChangeText={setOtp}
-              keyboardType="number-pad"
-              maxLength={10}
-            />
-          )}
-
-          <View style={{ gap: 6 }}>
-            <Input
-              label={mode === 'reset-otp' ? 'New Password' : 'Password'}
-              placeholder={mode === 'reset-otp' ? 'Enter new password (min 6 chars)' : 'Enter password'}
-              value={pw}
-              onChangeText={setPw}
-              secureTextEntry={!showPw}
-              rightElement={
-                <Pressable onPress={() => setShowPw(!showPw)} hitSlop={10} style={{ padding: 4 }}>
-                  <Ionicons name={showPw ? 'eye-off-outline' : 'eye-outline'} size={22} color={c.muted} />
+              <View style={{ gap: 6 }}>
+                <Input
+                  label="Password"
+                  placeholder="Enter password"
+                  value={pw}
+                  onChangeText={setPw}
+                  secureTextEntry={!showPw}
+                  rightElement={
+                    <Pressable onPress={() => setShowPw(!showPw)} hitSlop={10} style={{ padding: 4 }}>
+                      <Ionicons name={showPw ? 'eye-off-outline' : 'eye-outline'} size={22} color={c.muted} />
+                    </Pressable>
+                  }
+                />
+                <Pressable
+                  onPress={() => { setMode('forgot-choice'); setErr(null); setMsg(null); }}
+                  style={{ alignSelf: 'flex-end', paddingVertical: 4 }}>
+                  <T size={13} color={c.accent} weight="600">Forgot password / First-time setup?</T>
                 </Pressable>
-              }
-            />
-            {mode === 'login' && (
-              <Pressable
-                onPress={() => { setMode('forgot'); setErr(null); setMsg(null); }}
-                style={{ alignSelf: 'flex-end', paddingVertical: 4 }}>
-                <T size={13} color={c.accent} weight="600">Forgot password?</T>
-              </Pressable>
-            )}
-          </View>
-
-          {mode === 'reset-otp' && (
-            <Input
-              label="Confirm New Password"
-              placeholder="Re-enter new password"
-              value={confirmPw}
-              onChangeText={setConfirmPw}
-              secureTextEntry={!showPw}
-            />
-          )}
-
-          {msg && (
-            <View style={{ backgroundColor: c.accent + '15', padding: 12, borderRadius: 10, borderColor: c.accent + '33', borderWidth: 1 }}>
-              <T size={13} color={c.accent} weight="600">{msg}</T>
-            </View>
-          )}
-          <ErrorText msg={err} />
-
-          <Button
-            label={
-              mode === 'forgot'
-                ? 'Send verification code'
-                : mode === 'reset-otp'
-                ? 'Confirm & Reset Password'
-                : 'Sign In'
-            }
-            onPress={submit}
-            loading={busy}
-          />
-
-          {mode === 'reset-otp' && (
-            <Button
-              label="Resend verification code"
-              variant="ghost"
-              onPress={sendOtp}
-              loading={busy}
-            />
-          )}
-
-          {mode === 'forgot' || mode === 'reset-otp' ? (
-            <Button
-              label="Back to sign in"
-              variant="ghost"
-              onPress={() => { setMode('login'); setErr(null); setMsg(null); setOtp(''); setConfirmPw(''); }}
-            />
-          ) : (
-            <View style={{
-              backgroundColor: c.cardAlt,
-              padding: 14,
-              borderRadius: 12,
-              gap: 4,
-              marginTop: 10,
-              borderWidth: 1,
-              borderColor: c.border,
-            }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Ionicons name="shield-checkmark-outline" size={18} color={c.accent} />
-                <T size={13} weight="700">Accounts Managed by Administrator</T>
               </View>
-              <T size={12} muted>
-                New partner accounts are created and linked by the master administrator (stevenmwizerwa1@gmail.com). You will receive an email code to activate your account.
-              </T>
+
+              {msg && (
+                <View style={{ backgroundColor: c.accent + '15', padding: 12, borderRadius: 10, borderColor: c.accent + '33', borderWidth: 1 }}>
+                  <T size={13} color={c.accent} weight="600">{msg}</T>
+                </View>
+              )}
+              <ErrorText msg={err} />
+
+              <Button label="Sign In" onPress={submitLogin} loading={busy} />
+            </>
+          )}
+
+          {/* MODE 2: FORGOT CHOICES (TWO DISTINCT ACTIONS) */}
+          {mode === 'forgot-choice' && (
+            <View style={{ gap: 12 }}>
+              {/* Option 1: Use Verification Code */}
+              <Pressable
+                onPress={() => { setMode('enter-code'); setErr(null); setMsg(null); }}
+                style={({ pressed }) => ({
+                  backgroundColor: c.card,
+                  borderColor: c.accent,
+                  borderWidth: 1.5,
+                  borderRadius: 16,
+                  padding: 16,
+                  gap: 8,
+                  opacity: pressed ? 0.85 : 1,
+                })}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <View style={{ backgroundColor: c.accent + '20', padding: 10, borderRadius: 10 }}>
+                    <Ionicons name="key-outline" size={24} color={c.accent} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <T weight="700" size={16} color={c.accent}>1. Use Verification Code</T>
+                    <T size={12} muted>For newly linked partners with an invite code from the admin, or if you already have an OTP.</T>
+                  </View>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                  <T size={13} weight="700" color={c.accent}>Enter Code & Set Password</T>
+                  <Ionicons name="arrow-forward" size={16} color={c.accent} />
+                </View>
+              </Pressable>
+
+              {/* Option 2: Request New Reset Code */}
+              <Pressable
+                onPress={() => { setMode('request-code'); setErr(null); setMsg(null); }}
+                style={({ pressed }) => ({
+                  backgroundColor: c.card,
+                  borderColor: c.border,
+                  borderWidth: 1,
+                  borderRadius: 16,
+                  padding: 16,
+                  gap: 8,
+                  opacity: pressed ? 0.85 : 1,
+                })}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <View style={{ backgroundColor: c.cardAlt, padding: 10, borderRadius: 10 }}>
+                    <Ionicons name="mail-unread-outline" size={24} color={c.blue} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <T weight="700" size={16}>2. Send Reset Code to Email</T>
+                    <T size={12} muted>For existing linked members who forgot their password and need a new code sent.</T>
+                  </View>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                  <T size={13} weight="700" color={c.blue}>Request New Code</T>
+                  <Ionicons name="arrow-forward" size={16} color={c.blue} />
+                </View>
+              </Pressable>
+
+              <Button
+                label="← Back to Sign In"
+                variant="ghost"
+                onPress={() => { setMode('login'); setErr(null); setMsg(null); }}
+              />
             </View>
+          )}
+
+          {/* MODE 3: ENTER VERIFICATION CODE & SET NEW PASSWORD */}
+          {mode === 'enter-code' && (
+            <>
+              <Input
+                label="Email"
+                placeholder="your-email@example.com"
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+
+              <Input
+                label="Verification Code (OTP from email)"
+                placeholder="e.g. 123456"
+                value={otp}
+                onChangeText={setOtp}
+                keyboardType="number-pad"
+                maxLength={10}
+              />
+
+              <Input
+                label="New Password"
+                placeholder="Enter new password (min 6 chars)"
+                value={pw}
+                onChangeText={setPw}
+                secureTextEntry={!showPw}
+                rightElement={
+                  <Pressable onPress={() => setShowPw(!showPw)} hitSlop={10} style={{ padding: 4 }}>
+                    <Ionicons name={showPw ? 'eye-off-outline' : 'eye-outline'} size={22} color={c.muted} />
+                  </Pressable>
+                }
+              />
+
+              <Input
+                label="Confirm New Password"
+                placeholder="Re-enter new password"
+                value={confirmPw}
+                onChangeText={setConfirmPw}
+                secureTextEntry={!showPw}
+              />
+
+              {msg && (
+                <View style={{ backgroundColor: c.accent + '15', padding: 12, borderRadius: 10, borderColor: c.accent + '33', borderWidth: 1 }}>
+                  <T size={13} color={c.accent} weight="600">{msg}</T>
+                </View>
+              )}
+              <ErrorText msg={err} />
+
+              <Button label="Confirm & Set Password" onPress={submitResetOtp} loading={busy} />
+
+              <Button
+                label="Need a code? Send reset code"
+                variant="ghost"
+                onPress={() => { setMode('request-code'); setErr(null); setMsg(null); }}
+              />
+
+              <Button
+                label="← Back to choices"
+                variant="ghost"
+                onPress={() => { setMode('forgot-choice'); setErr(null); setMsg(null); }}
+              />
+            </>
+          )}
+
+          {/* MODE 4: REQUEST NEW RESET CODE */}
+          {mode === 'request-code' && (
+            <>
+              <Input
+                label="Your Email"
+                placeholder="your-email@example.com"
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+
+              {msg && (
+                <View style={{ backgroundColor: c.accent + '15', padding: 12, borderRadius: 10, borderColor: c.accent + '33', borderWidth: 1 }}>
+                  <T size={13} color={c.accent} weight="600">{msg}</T>
+                </View>
+              )}
+              <ErrorText msg={err} />
+
+              <Button label="Send Reset Code" onPress={sendOtp} loading={busy} />
+
+              <Button
+                label="Already have a code? Enter it here"
+                variant="ghost"
+                onPress={() => { setMode('enter-code'); setErr(null); setMsg(null); }}
+              />
+
+              <Button
+                label="← Back to choices"
+                variant="ghost"
+                onPress={() => { setMode('forgot-choice'); setErr(null); setMsg(null); }}
+              />
+            </>
           )}
 
           <CopyrightFooter />
