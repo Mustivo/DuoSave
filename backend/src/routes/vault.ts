@@ -8,6 +8,12 @@ import { sendPartnerSetupOtpEmail } from '../services/mailer';
 
 export const vault = Router();
 
+export const MASTER_ADMIN_EMAIL = 'stevenmwizerwa1@gmail.com';
+
+export function isMasterAdmin(email?: string | null): boolean {
+  return !!email && email.trim().toLowerCase() === MASTER_ADMIN_EMAIL;
+}
+
 const makeCode = () => {
   const s = randomBytes(5).toString('hex').toUpperCase();
   return `DUO-${s.slice(0, 4)}-${s.slice(4, 5)}`;
@@ -16,8 +22,9 @@ const makeCode = () => {
 vault.get('/me', h(async (req, res) => {
   res.setHeader('Cache-Control', 'private, max-age=5, stale-while-revalidate=30');
   const { data: profile } = await admin.from('profiles').select('id,name').eq('id', req.userId).single();
+  const isAdmin = isMasterAdmin(req.userEmail);
   let vId = req.vaultId;
-  if (!vId) return res.json({ profile, vault: null, partner: null, partners: [] });
+  if (!vId) return res.json({ profile, vault: null, partner: null, partners: [], isAdmin });
   const { data: v } = await admin.from('vaults').select('*').eq('id', vId).single();
   const { data: ms } = await admin.from('vault_members').select('user_id, joined_at').eq('vault_id', vId);
   const partnerIds = (ms ?? []).map((m) => m.user_id).filter((id) => id !== req.userId);
@@ -46,14 +53,13 @@ vault.get('/me', h(async (req, res) => {
     partner,
     partners,
     membersCount: (ms ?? []).length,
-    isAdmin: v?.created_by === req.userId,
+    isAdmin,
   });
 }));
 
 vault.post('/vault/partner', requireVault, h(async (req, res) => {
-  const { data: v } = await admin.from('vaults').select('*').eq('id', req.vaultId!).single();
-  if (v?.created_by !== req.userId) {
-    throw new HttpError(403, 'Only the vault owner can create or manage partner accounts');
+  if (!isMasterAdmin(req.userEmail)) {
+    throw new HttpError(403, `Only master administrator (${MASTER_ADMIN_EMAIL}) can create or manage partner accounts`);
   }
 
   const b = z.object({
@@ -68,7 +74,7 @@ vault.post('/vault/partner', requireVault, h(async (req, res) => {
     email_confirm: true,
   });
   if (error || !created.user) {
-    throw new HttpError(400, 'This email is already registered. Ask your partner to sign in and join using the invite code.');
+    throw new HttpError(400, 'This email is already registered. You can link them directly from the System Directory below.');
   }
   const partnerUser = created.user;
 
@@ -79,7 +85,7 @@ vault.post('/vault/partner', requireVault, h(async (req, res) => {
   await logAndAlertPartner(req.vaultId!, req.userId, 'join', `${b.name} was linked as a new vault partner`);
 
   const { data: adminProf } = await admin.from('profiles').select('name').eq('id', req.userId).maybeSingle();
-  const adminName = adminProf?.name || 'your partner';
+  const adminName = adminProf?.name || 'Administrator';
   const { data: recovery, error: recoveryError } = await admin.auth.admin.generateLink({ type: 'recovery', email });
   if (recoveryError || !recovery.properties?.email_otp) {
     throw new HttpError(500, 'Could not prepare the partner setup email');
@@ -95,9 +101,8 @@ vault.post('/vault/partner', requireVault, h(async (req, res) => {
 }));
 
 vault.delete('/vault/partner', requireVault, h(async (req, res) => {
-  const { data: v } = await admin.from('vaults').select('*').eq('id', req.vaultId!).single();
-  if (v?.created_by !== req.userId) {
-    throw new HttpError(403, 'Only the vault owner can unlink partners');
+  if (!isMasterAdmin(req.userEmail)) {
+    throw new HttpError(403, `Only master administrator (${MASTER_ADMIN_EMAIL}) can unlink partners`);
   }
 
   const targetUserId = (req.query.userId as string) || (req.body?.userId as string);
@@ -124,9 +129,8 @@ vault.delete('/vault/partner', requireVault, h(async (req, res) => {
 }));
 
 vault.delete('/vault/partner/:userId', requireVault, h(async (req, res) => {
-  const { data: v } = await admin.from('vaults').select('*').eq('id', req.vaultId!).single();
-  if (v?.created_by !== req.userId) {
-    throw new HttpError(403, 'Only the vault owner can unlink partners');
+  if (!isMasterAdmin(req.userEmail)) {
+    throw new HttpError(403, `Only master administrator (${MASTER_ADMIN_EMAIL}) can unlink partners`);
   }
   const targetUserId = req.params.userId;
   if (targetUserId === req.userId) {
@@ -172,9 +176,8 @@ vault.post('/vault/join', h(async (req, res) => {
 }));
 
 vault.patch('/vault', requireVault, h(async (req, res) => {
-  const { data: currentVault } = await admin.from('vaults').select('created_by').eq('id', req.vaultId!).single();
-  if (currentVault?.created_by !== req.userId) {
-    throw new HttpError(403, 'Only the vault admin can edit the savings plan');
+  if (!isMasterAdmin(req.userEmail)) {
+    throw new HttpError(403, `Only master administrator (${MASTER_ADMIN_EMAIL}) can edit the savings plan`);
   }
   const b = z.object({
     name: z.string().min(1).max(40).optional(),
@@ -185,6 +188,99 @@ vault.patch('/vault', requireVault, h(async (req, res) => {
   const { data, error } = await admin.from('vaults').update(b).eq('id', req.vaultId!).select().single();
   if (error) throw new HttpError(500, error.message);
   res.json(data);
+}));
+
+/* ---------- Master Admin System Directory & Partner Linking Portal ---------- */
+vault.get('/vault/admin/directory', requireVault, h(async (req, res) => {
+  if (!isMasterAdmin(req.userEmail)) {
+    throw new HttpError(403, `Only master administrator (${MASTER_ADMIN_EMAIL}) can access system directory`);
+  }
+
+  // 1. Fetch all registered auth users
+  const { data: usersData, error: usersErr } = await admin.auth.admin.listUsers({ perPage: 1000 });
+  if (usersErr) throw new HttpError(500, usersErr.message);
+
+  // 2. Fetch profiles
+  const { data: profiles } = await admin.from('profiles').select('id, name, created_at');
+  const profileMap = new Map((profiles ?? []).map((p) => [p.id, p]));
+
+  // 3. Fetch all vault memberships & vaults
+  const [{ data: memberships }, { data: vaultsList }] = await Promise.all([
+    admin.from('vault_members').select('vault_id, user_id, joined_at'),
+    admin.from('vaults').select('id, name'),
+  ]);
+
+  const vaultMap = new Map((vaultsList ?? []).map((v) => [v.id, v.name]));
+  const userVaultMap = new Map((memberships ?? []).map((m) => [m.user_id, m.vault_id]));
+
+  const currentVaultId = req.vaultId!;
+
+  const directory = (usersData.users ?? [])
+    .filter((u) => u.email?.toLowerCase() !== MASTER_ADMIN_EMAIL)
+    .map((u) => {
+      const p = profileMap.get(u.id);
+      const vId = userVaultMap.get(u.id);
+      const isLinkedToMyVault = vId === currentVaultId;
+      return {
+        id: u.id,
+        email: u.email ?? '',
+        name: p?.name || u.email?.split('@')[0] || 'User',
+        created_at: u.created_at,
+        isLinkedToMyVault,
+        isLinkedToAnyVault: !!vId,
+        currentVaultId: vId ?? null,
+        currentVaultName: vId ? (vaultMap.get(vId) || 'Active Vault') : null,
+      };
+    });
+
+  res.json({ ok: true, users: directory, total: directory.length });
+}));
+
+vault.post('/vault/admin/link', requireVault, h(async (req, res) => {
+  if (!isMasterAdmin(req.userEmail)) {
+    throw new HttpError(403, `Only master administrator (${MASTER_ADMIN_EMAIL}) can link partners`);
+  }
+
+  const { userId } = z.object({ userId: z.string().uuid() }).parse(req.body);
+  if (userId === req.userId) {
+    throw new HttpError(400, 'Cannot link yourself as a partner');
+  }
+
+  const { data: userResp } = await admin.auth.admin.getUserById(userId);
+  if (!userResp?.user) throw new HttpError(404, 'User not found in system');
+
+  // Insert or update member in admin's vault
+  const { error } = await admin.from('vault_members').upsert({
+    vault_id: req.vaultId!,
+    user_id: userId,
+  });
+  if (error) throw new HttpError(400, error.message);
+
+  const { data: p } = await admin.from('profiles').select('name').eq('id', userId).maybeSingle();
+  const partnerName = p?.name || userResp.user.email || 'Partner';
+
+  await logAndAlertPartner(req.vaultId!, req.userId, 'join', `${partnerName} was linked to the vault by master admin`);
+
+  res.json({ ok: true, message: `${partnerName} was successfully linked to your vault` });
+}));
+
+vault.post('/vault/admin/unlink', requireVault, h(async (req, res) => {
+  if (!isMasterAdmin(req.userEmail)) {
+    throw new HttpError(403, `Only master administrator (${MASTER_ADMIN_EMAIL}) can unlink partners`);
+  }
+
+  const { userId } = z.object({ userId: z.string().uuid() }).parse(req.body);
+  if (userId === req.userId) {
+    throw new HttpError(400, 'Cannot unlink yourself as admin');
+  }
+
+  const { data: p } = await admin.from('profiles').select('name').eq('id', userId).maybeSingle();
+  const partnerName = p?.name || 'Partner';
+
+  await admin.from('vault_members').delete().eq('vault_id', req.vaultId!).eq('user_id', userId);
+  await logAndAlertPartner(req.vaultId!, req.userId, 'join', `${partnerName} was unlinked from the vault`);
+
+  res.json({ ok: true, message: `${partnerName} was unlinked from your vault` });
 }));
 
 vault.get('/vault/summary', requireVault, h(async (req, res) => {

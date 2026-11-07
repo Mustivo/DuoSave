@@ -7,7 +7,27 @@ import { logAndAlertPartner } from '../services/notify';
 export const money = Router();
 money.use(requireVault);
 
+const MASTER_ADMIN_EMAIL = 'stevenmwizerwa1@gmail.com';
+
 const amount = z.number().positive().max(10_000_000).transform((n) => Math.round(n * 100) / 100);
+
+/**
+ * DuoSave Group Savings Loan Profit Charges:
+ * - RWF 0 – 5,000: no profit charge (0)
+ * - RWF 5,001 – 14,000: RWF 1,500 profit charge
+ * - RWF 14,001 – 22,000: RWF 3,000 profit charge
+ * - RWF 22,001 – 35,000: RWF 4,000 profit charge
+ * - RWF 35,001 – 50,000: RWF 5,000 profit charge
+ * - Above RWF 50,000: RWF 6,500 profit charge
+ */
+export function calculateProfitCharge(principal: number): number {
+  if (principal <= 5000) return 0;
+  if (principal <= 14000) return 1500;
+  if (principal <= 22000) return 3000;
+  if (principal <= 35000) return 4000;
+  if (principal <= 50000) return 5000;
+  return 6500;
+}
 
 async function nameOf(id: string) {
   const { data } = await admin.from('profiles').select('name').eq('id', id).single();
@@ -38,6 +58,16 @@ money.get('/savings', h(async (req, res) => {
 money.post('/loans', h(async (req, res) => {
   const b = z.object({ amount, purpose: z.string().max(80).optional() }).parse(req.body);
 
+  // Group Savings Rule Check: A member with an unpaid loan above RWF 50,000 may not take another loan unless emergency
+  const { data: myActiveLoans } = await admin.from('loans').select('amount, repaid, status')
+    .eq('vault_id', req.vaultId!).eq('borrower_id', req.userId).eq('status', 'active');
+
+  const unpaidBalance = (myActiveLoans ?? []).reduce((s, l) => s + (Number(l.amount) - Number(l.repaid)), 0);
+  const isEmergency = b.purpose?.toLowerCase().includes('emergency') || b.purpose?.toLowerCase().includes('urgent');
+  if (unpaidBalance > 50000 && !isEmergency) {
+    throw new HttpError(400, `Rule Limit: You have an existing unpaid loan balance of ${unpaidBalance} RWF. Members with unpaid loans above 50,000 RWF cannot request another loan unless it is a serious emergency.`);
+  }
+
   // Check available vault balance before creating request
   const { data: bal } = await admin.from('vault_balances').select('available').eq('vault_id', req.vaultId!).single();
   const available = Number(bal?.available ?? 0);
@@ -45,12 +75,19 @@ money.post('/loans', h(async (req, res) => {
     throw new HttpError(400, `The requested loan (${b.amount}) exceeds currently available vault savings (${available}).`);
   }
 
+  // Calculate official rule profit charge
+  const profitCharge = calculateProfitCharge(b.amount);
+  const totalRepay = b.amount + profitCharge;
+  const purposeText = b.purpose
+    ? `${b.purpose} (Principal: ${b.amount}, Profit charge: ${profitCharge})`
+    : `Principal: ${b.amount}, Profit charge: ${profitCharge}`;
+
   // Create loan with 'pending' status awaiting partner approval
   const { data, error } = await admin.from('loans').insert({
     vault_id: req.vaultId!,
     borrower_id: req.userId,
-    amount: b.amount,
-    purpose: b.purpose ?? null,
+    amount: totalRepay,
+    purpose: purposeText,
     status: 'pending',
   }).select().single();
 
@@ -66,11 +103,16 @@ money.post('/loans', h(async (req, res) => {
     req.vaultId!,
     req.userId,
     'loan',
-    `Loan Request: ${requesterName} requested a loan of ${b.amount}${b.purpose ? ` for ${b.purpose}` : ''}. Waiting for partner approval.`,
+    `Loan Request: ${requesterName} requested a loan of ${b.amount}${profitCharge > 0 ? ` (+${profitCharge} fee)` : ''}. Waiting for partner approval.`,
     b.amount,
   );
 
-  res.json({ ...data, requester_name: requesterName });
+  res.json({
+    ...data,
+    principal: b.amount,
+    profit_charge: profitCharge,
+    requester_name: requesterName,
+  });
 }));
 
 money.get('/loans', h(async (req, res) => {
@@ -244,24 +286,24 @@ money.post('/notifications/read', h(async (req, res) => {
 money.delete('/loans/:id', h(async (req, res) => {
   const { data: l } = await admin.from('loans').select('*').eq('id', req.params.id).eq('vault_id', req.vaultId!).maybeSingle();
   if (!l) throw new HttpError(404, 'Loan not found');
-  if (l.borrower_id !== req.userId) {
-    const { data: v } = await admin.from('vaults').select('created_by').eq('id', req.vaultId!).single();
-    if (v?.created_by !== req.userId) throw new HttpError(403, 'Only borrower or vault admin can delete this loan');
+  const isMaster = req.userEmail?.toLowerCase() === MASTER_ADMIN_EMAIL;
+  if (l.borrower_id !== req.userId && !isMaster) {
+    throw new HttpError(403, `Only the borrower or master administrator (${MASTER_ADMIN_EMAIL}) can delete this loan`);
   }
   if (Number(l.repaid) > 0) {
     throw new HttpError(400, 'Cannot delete a loan that has partial repayments');
   }
   await admin.from('loans').delete().eq('id', req.params.id);
-  await logAndAlertPartner(req.vaultId!, req.userId, 'loan', `Loan of ${l.amount} was deleted`);
+  await logAndAlertPartner(req.vaultId!, req.userId, 'loan', `Loan record of ${l.amount} was deleted`);
   res.json({ ok: true });
 }));
 
 money.delete('/savings/:id', h(async (req, res) => {
   const { data: c } = await admin.from('contributions').select('*').eq('id', req.params.id).eq('vault_id', req.vaultId!).maybeSingle();
   if (!c) throw new HttpError(404, 'Savings record not found');
-  if (c.user_id !== req.userId) {
-    const { data: v } = await admin.from('vaults').select('created_by').eq('id', req.vaultId!).single();
-    if (v?.created_by !== req.userId) throw new HttpError(403, 'Only creator or vault admin can delete this deposit');
+  const isMaster = req.userEmail?.toLowerCase() === MASTER_ADMIN_EMAIL;
+  if (c.user_id !== req.userId && !isMaster) {
+    throw new HttpError(403, `Only contributor or master administrator (${MASTER_ADMIN_EMAIL}) can delete this deposit`);
   }
   await admin.from('contributions').delete().eq('id', req.params.id);
   await logAndAlertPartner(req.vaultId!, req.userId, 'deposit', `Savings deposit of ${c.amount} was deleted`);

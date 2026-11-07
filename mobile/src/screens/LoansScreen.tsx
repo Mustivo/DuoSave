@@ -7,6 +7,24 @@ import { useTheme } from '../theme';
 import { Loan, Summary } from '../types';
 import { Button, Card, ConfirmModal, ErrorText, Input, Screen, StatusModal, T, money, useLoad } from '../ui';
 
+/**
+ * DuoSave Official Loan Rules Profit Charges:
+ * - RWF 0 – 5,000: no profit charge (0)
+ * - RWF 5,001 – 14,000: RWF 1,500 profit charge
+ * - RWF 14,001 – 22,000: RWF 3,000 profit charge
+ * - RWF 22,001 – 35,000: RWF 4,000 profit charge
+ * - RWF 35,001 – 50,000: RWF 5,000 profit charge
+ * - Above RWF 50,000: RWF 6,500 profit charge
+ */
+export function calculateProfitCharge(principal: number): number {
+  if (principal <= 5000) return 0;
+  if (principal <= 14000) return 1500;
+  if (principal <= 22000) return 3000;
+  if (principal <= 35000) return 4000;
+  if (principal <= 50000) return 5000;
+  return 6500;
+}
+
 export default function LoansScreen() {
   const { c } = useTheme();
   const { me } = useAuth();
@@ -23,6 +41,7 @@ export default function LoansScreen() {
   const [repay, setRepay] = useState<Record<string, string>>({});
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [showRules, setShowRules] = useState(false);
 
   // Modern Confirmation Modal state
   const [confirmConfig, setConfirmConfig] = useState<{
@@ -64,9 +83,25 @@ export default function LoansScreen() {
   const nameOf = (id: string, fallback?: string) =>
     data?.summary.members.find((m) => m.id === id)?.name ?? fallback ?? 'Partner';
 
+  // Real-time calculation based on group rules
+  const enteredAmount = parseFloat(amount.replace(',', '.')) || 0;
+  const calculatedFee = enteredAmount > 0 ? calculateProfitCharge(enteredAmount) : 0;
+  const totalRepayDue = enteredAmount + calculatedFee;
+
+  // Unpaid loan rule check: A member with unpaid loan > 50,000 may not take another loan unless emergency
+  const myActiveLoans = (data?.loans ?? []).filter((l) => l.status === 'active' && l.borrower_id === me?.profile.id);
+  const myUnpaidBalance = myActiveLoans.reduce((sum, l) => sum + (Number(l.amount) - Number(l.repaid)), 0);
+  const isEmergency = purpose.toLowerCase().includes('emergency') || purpose.toLowerCase().includes('urgent');
+  const exceeds50kLimit = myUnpaidBalance > 50000 && !isEmergency;
+
   const requestLoan = () => {
     const n = parseFloat(amount.replace(',', '.'));
     if (!(n > 0)) { setErr('Enter an amount greater than 0'); return; }
+
+    if (exceeds50kLimit) {
+      setErr(`Rule Restriction: You have an unpaid loan balance of ${money(myUnpaidBalance, cur)}. Rules forbid additional loans above 50,000 RWF unless it is a serious emergency.`);
+      return;
+    }
 
     const available = data?.summary.available ?? 0;
     if (n > available) {
@@ -74,10 +109,13 @@ export default function LoansScreen() {
       return;
     }
 
+    const fee = calculateProfitCharge(n);
+    const totalDue = n + fee;
+
     setConfirmConfig({
       visible: true,
       title: 'Submit Loan Request?',
-      message: `Your request for ${money(n, cur)} will be sent to your partner for review and approval before any funds leave the shared vault.`,
+      message: `Principal: ${money(n, cur)}\nRule Profit Charge: ${fee > 0 ? `+${money(fee, cur)}` : 'RWF 0'}\nTotal to Repay: ${money(totalDue, cur)}\n\nYour partner will be notified to review and approve this loan before funds are disbursed.`,
       icon: 'hourglass-outline',
       confirmLabel: 'Submit Request',
       isDestructive: false,
@@ -91,7 +129,7 @@ export default function LoansScreen() {
           setStatusConfig({
             visible: true,
             title: 'Request Sent',
-            message: `Your loan request for ${money(n, cur)} was submitted! Your partner has been notified to approve it.`,
+            message: `Your loan request for ${money(n, cur)} (Total repayment: ${money(totalDue, cur)}) was submitted! Your partner has been notified to approve it.`,
             type: 'success',
           });
         } catch (e: any) {
@@ -288,7 +326,7 @@ export default function LoansScreen() {
                   <T weight="700" size={15}>{borrowerName}</T>
                   <T weight="800" size={17} color={c.accent}>{money(Number(l.amount), cur)}</T>
                 </View>
-                {l.purpose && <T size={13} muted>Purpose: {l.purpose}</T>}
+                {l.purpose && <T size={13} muted>{l.purpose}</T>}
                 <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
                   <Button
                     label="Approve"
@@ -355,14 +393,94 @@ export default function LoansScreen() {
 
       {/* Request Loan Form */}
       <Card>
-        <T weight="700" size={16}>Request a loan</T>
+        <T weight="700" size={16}>Request a Loan</T>
         <T size={13} muted>
-          Enter the amount you wish to borrow. Your partner will be notified to approve it.
+          Enter the amount you wish to borrow. Group profit charges apply according to our savings rules.
         </T>
-        <Input label={`Amount (${cur})`} value={amount} onChangeText={setAmount} keyboardType="decimal-pad" placeholder="0.00" />
-        <Input label="Purpose (optional)" value={purpose} onChangeText={setPurpose} placeholder="Flight tickets, repair, emergency..." />
+
+        {myUnpaidBalance > 50000 && (
+          <View style={{ backgroundColor: c.warn + '18', padding: 12, borderRadius: 10, borderColor: c.warn + '40', borderWidth: 1, gap: 4 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Ionicons name="warning-outline" size={18} color={c.warn} />
+              <T size={13} weight="700" color={c.warn}>Rule Restriction</T>
+            </View>
+            <T size={12}>
+              You currently have an unpaid loan balance of {money(myUnpaidBalance, cur)}. Rules forbid additional loans above 50,000 RWF unless there is a serious emergency. Specify "Emergency" in your purpose to request.
+            </T>
+          </View>
+        )}
+
+        <Input
+          label={`Principal Amount (${cur})`}
+          value={amount}
+          onChangeText={setAmount}
+          keyboardType="decimal-pad"
+          placeholder="0.00"
+        />
+
+        {/* Real-time Rule Calculation Box */}
+        {enteredAmount > 0 && (
+          <View style={{
+            backgroundColor: c.cardAlt,
+            padding: 12,
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: c.border,
+            gap: 6,
+          }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+              <T size={13} muted>Requested Principal:</T>
+              <T size={13} weight="600">{money(enteredAmount, cur)}</T>
+            </View>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+              <T size={13} muted>Rule Profit Charge:</T>
+              <T size={13} weight="700" color={calculatedFee > 0 ? c.warn : c.accent}>
+                {calculatedFee > 0 ? `+ ${money(calculatedFee, cur)}` : 'RWF 0 (No fee)'}
+              </T>
+            </View>
+            <View style={{ height: 1, backgroundColor: c.border, marginVertical: 2 }} />
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <T size={14} weight="700">Total Repayment Due:</T>
+              <T size={16} weight="800" color={c.accent}>{money(totalRepayDue, cur)}</T>
+            </View>
+          </View>
+        )}
+
+        <Input
+          label="Purpose"
+          value={purpose}
+          onChangeText={setPurpose}
+          placeholder="Flight tickets, repair, emergency..."
+        />
         <ErrorText msg={err} />
         <Button label="Submit Loan Request" onPress={requestLoan} loading={busy} />
+      </Card>
+
+      {/* Official Loan Rules Accordion */}
+      <Card>
+        <Pressable
+          onPress={() => setShowRules(!showRules)}
+          style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Ionicons name="document-text-outline" size={18} color={c.accent} />
+            <T weight="700" size={15}>Official Loan Profit Charges</T>
+          </View>
+          <Ionicons name={showRules ? 'chevron-up' : 'chevron-down'} size={18} color={c.muted} />
+        </Pressable>
+
+        {showRules && (
+          <View style={{ gap: 6, marginTop: 4 }}>
+            <T size={12}>• RWF 0 – 5,000: <T weight="700" color={c.accent}>No profit charge</T></T>
+            <T size={12}>• RWF 5,001 – 14,000: <T weight="700">RWF 1,500 profit charge</T></T>
+            <T size={12}>• RWF 14,001 – 22,000: <T weight="700">RWF 3,000 profit charge</T></T>
+            <T size={12}>• RWF 22,001 – 35,000: <T weight="700">RWF 4,000 profit charge</T></T>
+            <T size={12}>• RWF 35,001 – 50,000: <T weight="700">RWF 5,000 profit charge</T></T>
+            <T size={12}>• Above RWF 50,000: <T weight="700">RWF 6,500 profit charge</T></T>
+            <T size={11} muted style={{ marginTop: 4 }}>
+              * Unpaid loan after 3 weeks receives an additional RWF 1,500 charge.
+            </T>
+          </View>
+        )}
       </Card>
 
       {/* Active Loans */}
@@ -371,11 +489,11 @@ export default function LoansScreen() {
       {activeLoans.map((l) => {
         const owed = Number(l.amount) - Number(l.repaid);
         const mine = l.borrower_id === me?.profile.id;
-        const canDelete = (mine || me?.profile.id === data?.summary.vault.created_by) && Number(l.repaid) === 0;
+        const canDelete = (mine || me?.profile.email?.toLowerCase() === 'stevenmwizerwa1@gmail.com') && Number(l.repaid) === 0;
         return (
           <Card key={l.id}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <T weight="700">{mine ? 'You' : nameOf(l.borrower_id, l.requester_name)}{l.purpose ? `: ${l.purpose}` : ''}</T>
+              <T weight="700">{mine ? 'You' : nameOf(l.borrower_id, l.requester_name)}</T>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                 <T weight="700" color={c.warn}>Active</T>
                 {canDelete && (
@@ -388,6 +506,7 @@ export default function LoansScreen() {
                 )}
               </View>
             </View>
+            {l.purpose && <T size={13} muted>{l.purpose}</T>}
             <T size={13} muted>{money(Number(l.repaid), cur)} repaid of {money(Number(l.amount), cur)}</T>
             {mine && (
               <View style={{ gap: 8, marginTop: 4 }}>
@@ -415,11 +534,12 @@ export default function LoansScreen() {
             return (
               <Card key={l.id}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <T weight="700">{borrowerName}{l.purpose ? `: ${l.purpose}` : ''}</T>
+                  <T weight="700">{borrowerName}</T>
                   <T weight="700" color={isRepaid ? c.accent : c.danger}>
                     {isRepaid ? '✓ Repaid' : '✗ Declined'}
                   </T>
                 </View>
+                {l.purpose && <T size={12} muted>{l.purpose}</T>}
                 <T size={13} muted>
                   {money(Number(l.amount), cur)} {isRepaid ? '(Fully settled)' : '(Declined)'}
                 </T>

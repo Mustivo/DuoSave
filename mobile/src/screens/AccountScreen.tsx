@@ -1,26 +1,45 @@
 import React, { useEffect, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { ActivityIndicator, Pressable, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '../api';
 import { useAuth } from '../auth';
 import { Mode, useTheme } from '../theme';
+import { Profile } from '../types';
 import { Button, Card, ConfirmModal, ErrorText, Input, Screen, StatusModal, T } from '../ui';
+
+const MASTER_ADMIN_EMAIL = 'stevenmwizerwa1@gmail.com';
+
+type SystemUser = {
+  id: string;
+  email: string;
+  name: string;
+  created_at: string;
+  isLinkedToMyVault: boolean;
+  isLinkedToAnyVault: boolean;
+  currentVaultId: string | null;
+  currentVaultName: string | null;
+};
 
 export default function AccountScreen() {
   const { c, mode, setMode } = useTheme();
   const { me, refreshMe, signOut } = useAuth();
   const v = me?.vault;
+
   const [goal, setGoal] = useState('');
   const [target, setTarget] = useState('');
   const [day, setDay] = useState('');
   const [err, setErr] = useState<string | null>(null);
 
-  // Partner account management for the vault owner.
+  // Partner account creation state
   const [pName, setPName] = useState('');
   const [pEmail, setPEmail] = useState('');
   const [pBusy, setPBusy] = useState(false);
   const [pErr, setPErr] = useState<string | null>(null);
   const [pSuccess, setPSuccess] = useState<string | null>(null);
+
+  // System Partner Directory state
+  const [systemUsers, setSystemUsers] = useState<SystemUser[]>([]);
+  const [loadingDir, setLoadingDir] = useState(false);
 
   // Modern Confirmation & Status Modal States
   const [confirmConfig, setConfirmConfig] = useState<{
@@ -49,12 +68,33 @@ export default function AccountScreen() {
     message: '',
   });
 
+  const isMasterAdmin = (me?.profile?.email?.toLowerCase() === MASTER_ADMIN_EMAIL) || !!me?.isAdmin;
+
+  const loadDirectory = async () => {
+    if (!isMasterAdmin) return;
+    setLoadingDir(true);
+    try {
+      const res = await api.get<{ ok: boolean; users: SystemUser[] }>('/vault/admin/directory');
+      setSystemUsers(res.users ?? []);
+    } catch (e: any) {
+      console.warn('Directory fetch error:', e?.message);
+    } finally {
+      setLoadingDir(false);
+    }
+  };
+
   useEffect(() => {
     if (!v) return;
     setGoal(String(v.savings_goal));
     setTarget(String(v.monthly_target));
     setDay(String(v.reminder_day));
   }, [v?.id]);
+
+  useEffect(() => {
+    if (isMasterAdmin) {
+      loadDirectory();
+    }
+  }, [isMasterAdmin]);
 
   const saveSettings = async () => {
     setErr(null);
@@ -82,7 +122,7 @@ export default function AccountScreen() {
       setStatusConfig({
         visible: true,
         title: 'Reminder Sent',
-        message: 'A savings notification was sent to both partner accounts.',
+        message: 'A savings notification was sent to all linked partner accounts.',
         type: 'success',
       });
     } catch (e: any) {
@@ -90,17 +130,10 @@ export default function AccountScreen() {
     }
   };
 
-  const isVaultOwner = !!(v && me?.profile?.id && v.created_by === me.profile.id);
-
   const handleSavePartner = async () => {
-    if (!pName.trim()) {
-      setPErr('Enter the partner name');
-      return;
-    }
-    if (!pEmail.trim() || !pEmail.includes('@')) {
-      setPErr('Enter a valid email address');
-      return;
-    }
+    if (!pName.trim()) { setPErr('Enter the partner name'); return; }
+    if (!pEmail.trim() || !pEmail.includes('@')) { setPErr('Enter a valid email address'); return; }
+
     setPErr(null);
     setPSuccess(null);
     setPBusy(true);
@@ -118,12 +151,46 @@ export default function AccountScreen() {
         message: `Account for ${res.partner.name} (${res.partner.email}) was created. A secure password setup code was emailed to them.`,
         type: 'success',
       });
-      await refreshMe();
+      await Promise.all([refreshMe(), loadDirectory()]);
     } catch (e: any) {
       setPErr(e.message);
     } finally {
       setPBusy(false);
     }
+  };
+
+  const handleLinkFromDirectory = (user: SystemUser) => {
+    setConfirmConfig({
+      visible: true,
+      title: 'Link Partner to Vault?',
+      message: `Do you want to link ${user.name} (${user.email}) to this shared vault? They will be able to save, borrow, and view shared balances.`,
+      icon: 'link-outline',
+      confirmLabel: 'Link Partner',
+      isDestructive: false,
+      onConfirm: async () => {
+        setConfirmConfig((prev) => ({ ...prev, visible: false }));
+        setPBusy(true);
+        try {
+          await api.post('/vault/admin/link', { userId: user.id });
+          await Promise.all([refreshMe(), loadDirectory()]);
+          setStatusConfig({
+            visible: true,
+            title: 'Partner Linked',
+            message: `${user.name} is now linked to your vault!`,
+            type: 'success',
+          });
+        } catch (e: any) {
+          setStatusConfig({
+            visible: true,
+            title: 'Linking Error',
+            message: e.message,
+            type: 'error',
+          });
+        } finally {
+          setPBusy(false);
+        }
+      },
+    });
   };
 
   const handleUnlinkPartner = (partnerToUnlink: { id: string; name: string }) => {
@@ -140,7 +207,7 @@ export default function AccountScreen() {
         setPErr(null);
         try {
           await api.delete(`/vault/partner?userId=${partnerToUnlink.id}`);
-          await refreshMe();
+          await Promise.all([refreshMe(), loadDirectory()]);
           setStatusConfig({
             visible: true,
             title: 'Partner Unlinked',
@@ -175,91 +242,166 @@ export default function AccountScreen() {
 
   return (
     <Screen title="Account">
+      {/* Profile Card */}
       <Card>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <T weight="700" size={16}>{me?.profile.name}</T>
-          {isVaultOwner && (
+          {isMasterAdmin && (
             <View style={{ backgroundColor: c.accent + '22', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }}>
-              <T size={12} weight="700" color={c.accent}>👑 Master Admin</T>
+              <T size={12} weight="700" color={c.accent}>👑 Master Administrator</T>
             </View>
           )}
         </View>
         {me?.profile?.email && <T muted size={13}>{me.profile.email}</T>}
         <T muted size={13}>
           {partnersList.length > 0
-            ? `Linked Partners (${partnersList.length}): ${partnersList.map((p) => p.name).join(', ')}`
+            ? `Vault Partners (${partnersList.length}): ${partnersList.map((p) => p.name).join(', ')}`
             : 'No partners linked yet'}
         </T>
-        {v && <T size={13} muted>Invite code: <T weight="700" color={c.accent}>{v.invite_code}</T></T>}
+        {v && <T size={13} muted>Vault Invite Code: <T weight="700" color={c.accent}>{v.invite_code}</T></T>}
       </Card>
 
-      {/* Admin Partner Creation and Management Card */}
-      {isVaultOwner && (
-        <Card>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <T weight="700" size={16}>Vault Partners ({partnersList.length})</T>
-            <View style={{ backgroundColor: c.accent + '18', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
-              <T size={11} weight="600" color={c.accent}>Admin Only</T>
+      {/* MASTER ADMIN PORTAL */}
+      {isMasterAdmin && (
+        <>
+          {/* Guide Card: How Partner Linking Works */}
+          <Card style={{ borderColor: c.accent, borderWidth: 1.5, backgroundColor: c.accent + '0D' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Ionicons name="information-circle" size={22} color={c.accent} />
+              <T weight="700" size={16} color={c.accent}>How Partner Linking Works</T>
             </View>
-          </View>
-          <T size={13} muted>
-            Create accounts for partners to link them to your shared vault. Each partner will receive an email code to set up their password.
-          </T>
+            <View style={{ gap: 6, marginTop: 4 }}>
+              <T size={13}>
+                <T weight="700">1. Link from System Directory:</T> Any registered partner in the system is listed below. Tap <T weight="700" color={c.accent}>"Link to Vault"</T> to connect them with 1 tap.
+              </T>
+              <T size={13}>
+                <T weight="700">2. Link with Invite Code:</T> Share your invite code <T weight="700" color={c.accent}>({v?.invite_code})</T> with a partner. They can enter it to join.
+              </T>
+              <T size={13}>
+                <T weight="700">3. Create New Account:</T> Enter a partner's name and email in the creation form below. They will immediately receive an email OTP to choose their password.
+              </T>
+            </View>
+          </Card>
 
-          {partnersList.length > 0 && (
-            <View style={{ gap: 8, marginTop: 4 }}>
-              <T size={12} weight="700" muted>CONNECTED MEMBERS</T>
-              {partnersList.map((partner) => (
-                <View
-                  key={partner.id}
-                  style={{
-                    backgroundColor: c.cardAlt,
-                    padding: 12,
-                    borderRadius: 10,
-                    flexDirection: 'row',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                  }}>
-                  <View style={{ flex: 1, gap: 2 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Ionicons name="person-circle-outline" size={20} color={c.accent} />
-                      <T size={14} weight="700">{partner.name}</T>
-                    </View>
-                    {partner.email ? <T size={12} muted>{partner.email}</T> : null}
-                  </View>
-                  <Pressable
-                    onPress={() => handleUnlinkPartner(partner)}
-                    disabled={pBusy}
-                    hitSlop={8}
-                    style={({ pressed }) => ({
+          {/* System Directory: All Partners Across the System */}
+          <Card>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Ionicons name="people" size={20} color={c.accent} />
+                <T weight="700" size={16}>All System Partners ({systemUsers.length})</T>
+              </View>
+              <Pressable onPress={loadDirectory} disabled={loadingDir} hitSlop={8} style={{ padding: 4 }}>
+                {loadingDir ? (
+                  <ActivityIndicator size="small" color={c.accent} />
+                ) : (
+                  <Ionicons name="refresh" size={18} color={c.accent} />
+                )}
+              </Pressable>
+            </View>
+
+            <T size={12} muted>
+              Every user account registered in the DuoSave database and their current linking status:
+            </T>
+
+            {loadingDir && systemUsers.length === 0 ? (
+              <ActivityIndicator color={c.accent} style={{ marginVertical: 12 }} />
+            ) : systemUsers.length === 0 ? (
+              <T size={13} muted style={{ textAlign: 'center', paddingVertical: 10 }}>No other registered partners found in system.</T>
+            ) : (
+              <View style={{ gap: 8, marginTop: 4 }}>
+                {systemUsers.map((user) => (
+                  <View
+                    key={user.id}
+                    style={{
+                      backgroundColor: c.cardAlt,
+                      padding: 12,
+                      borderRadius: 12,
                       flexDirection: 'row',
+                      justifyContent: 'space-between',
                       alignItems: 'center',
-                      gap: 4,
-                      backgroundColor: c.danger + '20',
-                      paddingHorizontal: 10,
-                      paddingVertical: 6,
-                      borderRadius: 8,
-                      opacity: pressed || pBusy ? 0.6 : 1,
-                    })}>
-                    <Ionicons name="person-remove-outline" size={15} color={c.danger} />
-                    <T size={12} weight="700" color={c.danger}>Unlink</T>
-                  </Pressable>
-                </View>
-              ))}
-            </View>
-          )}
+                      borderWidth: user.isLinkedToMyVault ? 1 : 0,
+                      borderColor: user.isLinkedToMyVault ? c.accent + '40' : 'transparent',
+                    }}>
+                    <View style={{ flex: 1, gap: 2 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Ionicons name="person-circle-outline" size={20} color={user.isLinkedToMyVault ? c.accent : c.muted} />
+                        <T size={14} weight="700">{user.name}</T>
+                      </View>
+                      <T size={12} muted>{user.email}</T>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                        <View style={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: 4,
+                          backgroundColor: user.isLinkedToMyVault ? c.accent : user.isLinkedToAnyVault ? c.blue : c.warn,
+                        }} />
+                        <T size={11} color={user.isLinkedToMyVault ? c.accent : user.isLinkedToAnyVault ? c.blue : c.warn} weight="600">
+                          {user.isLinkedToMyVault
+                            ? 'Linked to this Vault'
+                            : user.isLinkedToAnyVault
+                            ? `In ${user.currentVaultName}`
+                            : 'Unlinked / Available'}
+                        </T>
+                      </View>
+                    </View>
 
-          <View style={{ marginTop: 8, gap: 6 }}>
-            <T size={13} weight="700">Add New Partner Account</T>
+                    {user.isLinkedToMyVault ? (
+                      <Pressable
+                        onPress={() => handleUnlinkPartner(user)}
+                        disabled={pBusy}
+                        hitSlop={8}
+                        style={({ pressed }) => ({
+                          backgroundColor: c.danger + '20',
+                          paddingHorizontal: 12,
+                          paddingVertical: 6,
+                          borderRadius: 8,
+                          opacity: pressed || pBusy ? 0.6 : 1,
+                        })}>
+                        <T size={12} weight="700" color={c.danger}>Unlink</T>
+                      </Pressable>
+                    ) : (
+                      <Pressable
+                        onPress={() => handleLinkFromDirectory(user)}
+                        disabled={pBusy}
+                        hitSlop={8}
+                        style={({ pressed }) => ({
+                          backgroundColor: c.accent + '20',
+                          paddingHorizontal: 12,
+                          paddingVertical: 6,
+                          borderRadius: 8,
+                          opacity: pressed || pBusy ? 0.6 : 1,
+                        })}>
+                        <T size={12} weight="700" color={c.accent}>+ Link to Vault</T>
+                      </Pressable>
+                    )}
+                  </View>
+                ))}
+              </View>
+            )}
+          </Card>
+
+          {/* Create & Link Brand New Partner Account */}
+          <Card>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <T weight="700" size={16}>Create & Link New Partner</T>
+              <View style={{ backgroundColor: c.accent + '18', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
+                <T size={11} weight="600" color={c.accent}>Admin Only</T>
+              </View>
+            </View>
+            <T size={13} muted>
+              Need to add someone new? Create their account here. An activation code will be sent to their email so they can set their password.
+            </T>
+
             <Input label="Partner Name" placeholder="e.g. Marie" value={pName} onChangeText={setPName} />
             <Input label="Partner Email" placeholder="marie@email.com" keyboardType="email-address" autoCapitalize="none" value={pEmail} onChangeText={setPEmail} />
             {pSuccess && <T size={13} color={c.accent} weight="600">{pSuccess}</T>}
             <ErrorText msg={pErr} />
-            <Button label={pBusy ? 'Saving...' : '+ Link New Partner'} onPress={handleSavePartner} loading={pBusy} />
-          </View>
-        </Card>
+            <Button label={pBusy ? 'Saving...' : '+ Create & Link Partner'} onPress={handleSavePartner} loading={pBusy} />
+          </Card>
+        </>
       )}
 
+      {/* Appearance Settings */}
       <Card>
         <T weight="700" size={16}>Appearance</T>
         <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -274,19 +416,20 @@ export default function AccountScreen() {
         </View>
       </Card>
 
+      {/* Savings Plan (Admin Editable) */}
       {v && (
         <Card>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <T weight="700" size={16}>Savings plan</T>
-            {!isVaultOwner && <T size={12} muted>Managed by {me?.partner?.name ?? 'the vault owner'}</T>}
+            <T weight="700" size={16}>Savings Plan</T>
+            {!isMasterAdmin && <T size={12} muted>Managed by {MASTER_ADMIN_EMAIL}</T>}
           </View>
-          <Input label={`Savings goal (${v.currency})`} value={goal} onChangeText={setGoal} keyboardType="decimal-pad" editable={isVaultOwner} />
-          <Input label="Monthly target for both of you" value={target} onChangeText={setTarget} keyboardType="decimal-pad" editable={isVaultOwner} />
+          <Input label={`Savings goal (${v.currency})`} value={goal} onChangeText={setGoal} keyboardType="decimal-pad" editable={isMasterAdmin} />
+          <Input label="Monthly target for the vault" value={target} onChangeText={setTarget} keyboardType="decimal-pad" editable={isMasterAdmin} />
           
           <View style={{ gap: 6 }}>
             <T size={12} muted weight="600">Reminder day of the month (1 to 28)</T>
-            <T size={11} muted>Both partners will see the savings alert notification on their dashboard on this day.</T>
-            {isVaultOwner && (
+            <T size={11} muted>All partners will see the savings alert notification on their dashboard on this day.</T>
+            {isMasterAdmin && (
               <View style={{ flexDirection: 'row', gap: 6, marginVertical: 4 }}>
                 {[1, 5, 15, 20, 25, 28].map((d) => (
                   <Pressable
@@ -304,14 +447,14 @@ export default function AccountScreen() {
                 ))}
               </View>
             )}
-            <Input value={day} onChangeText={setDay} keyboardType="number-pad" maxLength={2} editable={isVaultOwner} placeholder="e.g. 28" />
+            <Input value={day} onChangeText={setDay} keyboardType="number-pad" maxLength={2} editable={isMasterAdmin} placeholder="e.g. 28" />
           </View>
 
           <ErrorText msg={err} />
-          {isVaultOwner ? (
+          {isMasterAdmin ? (
             <Button label="Save plan" onPress={saveSettings} />
           ) : (
-            <T size={12} muted style={{ textAlign: 'center' }}>Only the vault owner can edit the savings plan</T>
+            <T size={12} muted style={{ textAlign: 'center' }}>Only master admin ({MASTER_ADMIN_EMAIL}) can edit the savings plan</T>
           )}
           <Button label="Send reminder now" variant="ghost" onPress={remindNow} />
         </Card>

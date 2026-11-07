@@ -6,6 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { StatusBar } from 'expo-status-bar';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from './theme';
 import { useAuth } from './auth';
@@ -54,11 +55,15 @@ export function useLoad<T>(fn: () => Promise<T>) {
 export function Screen({ title, children, onRefresh, refreshing }: {
   title: string; children: React.ReactNode; onRefresh?: () => void; refreshing?: boolean;
 }) {
-  const { c } = useTheme();
+  const { c, isDark } = useTheme();
   const { me } = useAuth();
-  const linked = me?.partner ? `${me.profile.name} & ${me.partner.name} linked` : 'Waiting for your partner';
+  const partnersCount = me?.partners?.length ?? (me?.partner ? 1 : 0);
+  const linked = partnersCount > 0
+    ? `${me?.profile.name} • ${partnersCount} partner${partnersCount > 1 ? 's' : ''} linked`
+    : 'Waiting for your partner';
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: c.bg }}>
+      <StatusBar style={isDark ? 'light' : 'dark'} />
       <ScrollView
         contentContainerStyle={{ padding: 20, paddingBottom: 40, gap: 14 }}
         keyboardShouldPersistTaps="handled"

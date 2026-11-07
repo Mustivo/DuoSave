@@ -28,7 +28,10 @@ export default function Root() {
     colors: { ...(isDark ? DarkTheme : DefaultTheme).colors, background: c.bg, card: c.card, border: c.border, text: c.text, primary: c.accent },
   }), [isDark, c.bg, c.card, c.border, c.text, c.accent]);
 
-  const bar = <StatusBar key={isDark ? 'dark' : 'light'} />;
+  // Set top status bar icons style explicitly:
+  // In light mode -> dark icons (black/charcoal) so clock, wifi, battery are clearly visible.
+  // In dark mode -> light icons (white).
+  const bar = <StatusBar style={isDark ? 'light' : 'dark'} />;
 
   if (!ready) return (
     <View style={{ flex: 1, backgroundColor: c.bg, justifyContent: 'center' }}>

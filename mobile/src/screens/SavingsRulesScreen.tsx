@@ -70,9 +70,9 @@ export default function SavingsRulesScreen() {
   const { me } = useAuth();
   const storageKey = `duosave_rules_${me?.vault?.id ?? 'default'}`;
 
-  // Only the vault creator/admin has permission to add, edit, or delete rules
-  const isVaultOwner = Boolean(me?.vault?.created_by && me?.profile?.id && me.vault.created_by === me.profile.id);
-  const adminName = isVaultOwner ? 'You' : (me?.partner?.name ?? 'Vault Admin');
+  // Only master admin (stevenmwizerwa1@gmail.com) has permission to add, edit, or delete rules
+  const isVaultOwner = (me?.profile?.email?.toLowerCase() === 'stevenmwizerwa1@gmail.com') || !!me?.isAdmin;
+  const adminName = isVaultOwner ? 'You (Master Admin)' : 'stevenmwizerwa1@gmail.com';
 
   const [rules, setRules] = useState<RuleSection[]>(DEFAULT_RULES);
   const [showAdd, setShowAdd] = useState(false);

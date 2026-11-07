@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, View, Image, Pressable, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import * as SecureStore from 'expo-secure-store';
 import { useAuth } from '../auth';
@@ -8,13 +9,12 @@ import { useTheme } from '../theme';
 import { api } from '../api';
 import { Button, ErrorText, Input, T } from '../ui';
 
-type AuthMode = 'login' | 'register' | 'forgot' | 'reset-otp';
+type AuthMode = 'login' | 'forgot' | 'reset-otp';
 
 export default function AuthScreen() {
-  const { c } = useTheme();
-  const { signIn, signUp } = useAuth();
+  const { c, isDark } = useTheme();
+  const { signIn } = useAuth();
   const [mode, setMode] = useState<AuthMode>('login');
-  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [pw, setPw] = useState('');
   const [confirmPw, setConfirmPw] = useState('');
@@ -82,19 +82,13 @@ export default function AuthScreen() {
       return;
     }
 
-    if (mode === 'register' && !name.trim()) { setErr('Please enter your name'); return; }
     if (!email.trim()) { setErr('Please enter your email'); return; }
-    if (!pw || pw.length < 6) { setErr('Password must be at least 6 characters'); return; }
+    if (!pw) { setErr('Please enter your password'); return; }
 
     setBusy(true); setErr(null); setMsg(null);
     try {
-      if (mode === 'register') {
-        await signUp(name.trim(), email.trim(), pw);
-        SecureStore.setItemAsync('duo_last_email', email.trim()).catch(() => {});
-      } else {
-        await signIn(email.trim(), pw);
-        SecureStore.setItemAsync('duo_last_email', email.trim()).catch(() => {});
-      }
+      await signIn(email.trim(), pw);
+      SecureStore.setItemAsync('duo_last_email', email.trim()).catch(() => {});
     } catch (e: any) {
       setErr(e.message);
     } finally {
@@ -103,7 +97,8 @@ export default function AuthScreen() {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: c.bg }}>
+    <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: c.bg }}>
+      <StatusBar style={isDark ? 'light' : 'dark'} />
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -120,16 +115,13 @@ export default function AuthScreen() {
                 ? 'Enter your email to receive a password reset verification code.'
                 : mode === 'reset-otp'
                 ? 'Enter the code sent to your email to set a new password.'
-                : 'Save smarter, together. Built for two.'}
+                : 'Sign in to access your shared savings vault.'}
             </T>
           </View>
 
-          {mode === 'register' && (
-            <Input label="Your name" value={name} onChangeText={setName} autoCapitalize="words" />
-          )}
-
           <Input
             label="Email"
+            placeholder="your-email@example.com"
             value={email}
             onChangeText={setEmail}
             keyboardType="email-address"
@@ -148,29 +140,27 @@ export default function AuthScreen() {
             />
           )}
 
-          {(mode === 'login' || mode === 'register' || mode === 'reset-otp') && (
-            <View style={{ gap: 6 }}>
-              <Input
-                label={mode === 'reset-otp' ? 'New Password' : 'Password'}
-                placeholder={mode === 'reset-otp' ? 'Enter new password (min 6 chars)' : undefined}
-                value={pw}
-                onChangeText={setPw}
-                secureTextEntry={!showPw}
-                rightElement={
-                  <Pressable onPress={() => setShowPw(!showPw)} hitSlop={10} style={{ padding: 4 }}>
-                    <Ionicons name={showPw ? 'eye-off-outline' : 'eye-outline'} size={22} color={c.muted} />
-                  </Pressable>
-                }
-              />
-              {mode === 'login' && (
-                <Pressable
-                  onPress={() => { setMode('forgot'); setErr(null); setMsg(null); }}
-                  style={{ alignSelf: 'flex-end', paddingVertical: 4 }}>
-                  <T size={13} color={c.accent} weight="600">Forgot password?</T>
+          <View style={{ gap: 6 }}>
+            <Input
+              label={mode === 'reset-otp' ? 'New Password' : 'Password'}
+              placeholder={mode === 'reset-otp' ? 'Enter new password (min 6 chars)' : 'Enter password'}
+              value={pw}
+              onChangeText={setPw}
+              secureTextEntry={!showPw}
+              rightElement={
+                <Pressable onPress={() => setShowPw(!showPw)} hitSlop={10} style={{ padding: 4 }}>
+                  <Ionicons name={showPw ? 'eye-off-outline' : 'eye-outline'} size={22} color={c.muted} />
                 </Pressable>
-              )}
-            </View>
-          )}
+              }
+            />
+            {mode === 'login' && (
+              <Pressable
+                onPress={() => { setMode('forgot'); setErr(null); setMsg(null); }}
+                style={{ alignSelf: 'flex-end', paddingVertical: 4 }}>
+                <T size={13} color={c.accent} weight="600">Forgot password?</T>
+              </Pressable>
+            )}
+          </View>
 
           {mode === 'reset-otp' && (
             <Input
@@ -195,9 +185,7 @@ export default function AuthScreen() {
                 ? 'Send verification code'
                 : mode === 'reset-otp'
                 ? 'Confirm & Reset Password'
-                : mode === 'register'
-                ? 'Create account'
-                : 'Log in'
+                : 'Sign In'
             }
             onPress={submit}
             loading={busy}
@@ -214,20 +202,28 @@ export default function AuthScreen() {
 
           {mode === 'forgot' || mode === 'reset-otp' ? (
             <Button
-              label="Back to log in"
+              label="Back to sign in"
               variant="ghost"
               onPress={() => { setMode('login'); setErr(null); setMsg(null); setOtp(''); setConfirmPw(''); }}
             />
           ) : (
-            <Button
-              label={mode === 'register' ? 'I already have an account' : 'Create a new account'}
-              variant="ghost"
-              onPress={() => {
-                setMode(mode === 'register' ? 'login' : 'register');
-                setErr(null);
-                setMsg(null);
-              }}
-            />
+            <View style={{
+              backgroundColor: c.cardAlt,
+              padding: 14,
+              borderRadius: 12,
+              gap: 4,
+              marginTop: 10,
+              borderWidth: 1,
+              borderColor: c.border,
+            }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Ionicons name="shield-checkmark-outline" size={18} color={c.accent} />
+                <T size={13} weight="700">Accounts Managed by Administrator</T>
+              </View>
+              <T size={12} muted>
+                New partner accounts are created and linked by the master administrator (stevenmwizerwa1@gmail.com). You will receive an email code to activate your account.
+              </T>
+            </View>
           )}
         </ScrollView>
       </KeyboardAvoidingView>

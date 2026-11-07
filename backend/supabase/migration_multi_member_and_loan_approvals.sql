@@ -69,3 +69,4 @@ BEGIN
   UPDATE loans SET status = 'rejected' WHERE id = p_loan RETURNING * INTO v_loan;
   RETURN v_loan;
 END $$;
+
