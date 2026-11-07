@@ -282,6 +282,16 @@ money.post('/notifications/read', h(async (req, res) => {
   res.json({ ok: true });
 }));
 
+money.delete('/notifications', h(async (req, res) => {
+  await admin.from('notifications').delete().eq('user_id', req.userId);
+  res.json({ ok: true, message: 'All notifications cleared' });
+}));
+
+money.post('/notifications/clear', h(async (req, res) => {
+  await admin.from('notifications').delete().eq('user_id', req.userId);
+  res.json({ ok: true, message: 'All notifications cleared' });
+}));
+
 /* ---------- Deletions ---------- */
 money.delete('/loans/:id', h(async (req, res) => {
   const { data: l } = await admin.from('loans').select('*').eq('id', req.params.id).eq('vault_id', req.vaultId!).maybeSingle();

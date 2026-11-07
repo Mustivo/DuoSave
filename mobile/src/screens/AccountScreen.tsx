@@ -5,7 +5,7 @@ import { api } from '../api';
 import { useAuth } from '../auth';
 import { Mode, useTheme } from '../theme';
 import { Profile } from '../types';
-import { Button, Card, ConfirmModal, ErrorText, Input, Screen, StatusModal, T } from '../ui';
+import { Button, Card, ConfirmModal, CopyrightFooter, ErrorText, Input, Screen, StatusModal, T } from '../ui';
 
 const MASTER_ADMIN_EMAIL = 'stevenmwizerwa1@gmail.com';
 
@@ -461,6 +461,8 @@ export default function AccountScreen() {
       )}
 
       <Button label="Log out" variant="danger" onPress={confirmSignOut} />
+
+      <CopyrightFooter />
 
       {/* Modern Confirmation Popup */}
       <ConfirmModal

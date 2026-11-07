@@ -126,7 +126,7 @@ export default function SavingsScreen() {
   const handleDismissReminder = async () => {
     setDismissedLocalReminder(true);
     try {
-      await api.post('/notifications/read');
+      await api.delete('/notifications');
       await reload();
     } catch {}
   };

@@ -7,7 +7,7 @@ import * as SecureStore from 'expo-secure-store';
 import { useAuth } from '../auth';
 import { useTheme } from '../theme';
 import { api } from '../api';
-import { Button, ErrorText, Input, T } from '../ui';
+import { Button, CopyrightFooter, ErrorText, Input, T } from '../ui';
 
 type AuthMode = 'login' | 'forgot' | 'reset-otp';
 
@@ -107,10 +107,10 @@ export default function AuthScreen() {
           contentContainerStyle={{ padding: 24, paddingBottom: 60, gap: 14 }}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
-          <View style={{ gap: 4, marginTop: 20, marginBottom: 8 }}>
-            <Image source={require('../../assets/icon.png')} style={{ width: 68, height: 68, borderRadius: 16 }} />
-            <T size={32} weight="800">DuoSave</T>
-            <T muted>
+          <View style={{ gap: 8, marginTop: 24, marginBottom: 16, alignItems: 'center' }}>
+            <Image source={require('../../assets/icon.png')} style={{ width: 84, height: 84, borderRadius: 20 }} />
+            <T size={32} weight="800" style={{ textAlign: 'center' }}>DuoSave</T>
+            <T muted style={{ textAlign: 'center', maxWidth: 300 }}>
               {mode === 'forgot'
                 ? 'Enter your email to receive a password reset verification code.'
                 : mode === 'reset-otp'
@@ -225,6 +225,8 @@ export default function AuthScreen() {
               </T>
             </View>
           )}
+
+          <CopyrightFooter />
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
