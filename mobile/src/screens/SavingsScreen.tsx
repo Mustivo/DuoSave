@@ -1,23 +1,26 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '../api';
 import { useAuth } from '../auth';
 import { useTheme } from '../theme';
-import { Notif, Summary } from '../types';
+import { Loan, Notif, Summary } from '../types';
 import { Button, Card, ErrorText, Input, ProgressBar, Screen, StatusModal, T, money, useLoad } from '../ui';
 
 export default function SavingsScreen() {
   const { c } = useTheme();
   const { me, refreshMe } = useAuth();
   const { data, loading, error, reload } = useLoad(async () => {
-    const [summary, notifs] = await Promise.all([
+    const [summary, notifs, loans] = await Promise.all([
       api.get<Summary>('/vault/summary'),
       api.get<Notif[]>('/notifications'),
+      api.get<Loan[]>('/loans').catch(() => [] as Loan[]),
     ]);
     return {
       summary,
       reminder: notifs.find((n) => n.type === 'reminder' && !n.read) ?? null,
+      partnerNotif: notifs.find((n) => n.type === 'partner' && !n.read) ?? null,
+      pendingLoanForMe: loans.find((l) => l.status === 'pending' && l.borrower_id !== me?.profile?.id) ?? null,
       allNotifs: notifs.filter((n) => !n.read),
     };
   });
@@ -26,6 +29,14 @@ export default function SavingsScreen() {
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  // Auto-refresh savings and notifications every 10 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      reload().catch(() => {});
+    }, 10000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Quick edit reminder day modal/input state for admin
   const [showEditDay, setShowEditDay] = useState(false);
@@ -122,7 +133,7 @@ export default function SavingsScreen() {
 
   const s = data?.summary;
   const cur = s?.vault.currency ?? 'RWF';
-  const colors = [c.accent, c.blue];
+  const memberColors = [c.accent, c.blue, '#9b5de5', '#f15bb5', '#fee440', '#00bbf9', '#00f5d4'];
   const monthTotal = s?.members.reduce((t, m) => t + m.thisMonth, 0) ?? 0;
   const reminderDay = s?.vault.reminder_day ?? 1;
 
@@ -137,6 +148,47 @@ export default function SavingsScreen() {
   return (
     <Screen title="Savings" onRefresh={reload} refreshing={loading}>
       <ErrorText msg={error} />
+
+      {/* Immediate Partner Activity & Savings Notification Banner */}
+      {data?.partnerNotif && (
+        <Card style={{
+          borderColor: c.accent,
+          borderWidth: 1.5,
+          backgroundColor: c.accent + '18',
+        }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+              <Ionicons name="sparkles" size={24} color={c.accent} />
+              <View style={{ flex: 1 }}>
+                <T weight="700" size={15} color={c.accent}>{data.partnerNotif.title}</T>
+                <T size={13}>{data.partnerNotif.body}</T>
+              </View>
+            </View>
+            <Pressable onPress={handleDismissReminder} hitSlop={8} style={{ padding: 4 }}>
+              <Ionicons name="close" size={18} color={c.muted} />
+            </Pressable>
+          </View>
+        </Card>
+      )}
+
+      {/* Immediate Pending Loan Request Requiring Approval */}
+      {data?.pendingLoanForMe && (
+        <Card style={{
+          borderColor: c.warn,
+          borderWidth: 1.5,
+          backgroundColor: c.warn + '18',
+        }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <Ionicons name="alert-circle" size={24} color={c.warn} />
+            <View style={{ flex: 1, gap: 2 }}>
+              <T weight="700" size={15} color={c.warn}>Loan Request Awaiting Your Review</T>
+              <T size={13}>
+                Your partner requested a loan of {money(Number(data.pendingLoanForMe.amount), cur)}. Please open the Loans tab to review and approve.
+              </T>
+            </View>
+          </View>
+        </Card>
+      )}
 
       {/* Dynamic Notification Banner displayed for BOTH users based on reminder_day */}
       {!dismissedLocalReminder && (data?.reminder || isTodayReminderDay || isApproaching || isPastDue) && (
@@ -255,11 +307,11 @@ export default function SavingsScreen() {
           <T muted size={12}>Total duo balance</T>
           <T size={36} weight="800">{money(s.available, cur)}</T>
           {s.loanedOut > 0 && <T size={12} muted>{money(s.totalDeposited, cur)} saved, {money(s.loanedOut, cur)} out on loan</T>}
-          <ProgressBar parts={s.members.map((m, i) => ({ value: m.total, color: colors[i % 2] }))} />
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+          <ProgressBar parts={s.members.map((m, i) => ({ value: m.total, color: memberColors[i % memberColors.length] }))} />
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 4 }}>
             {s.members.map((m, i) => (
-              <View key={m.id}>
-                <T size={12} muted color={colors[i % 2]}>{m.id === me?.profile.id ? `${m.name} (you)` : m.name}</T>
+              <View key={m.id} style={{ minWidth: 90 }}>
+                <T size={12} muted color={memberColors[i % memberColors.length]}>{m.id === me?.profile.id ? `${m.name} (you)` : m.name}</T>
                 <T weight="700">{money(m.total, cur)}</T>
               </View>
             ))}

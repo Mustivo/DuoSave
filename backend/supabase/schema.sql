@@ -27,16 +27,7 @@ create table vault_members (
   primary key (vault_id, user_id)
 );
 
--- A vault is for exactly two people.
-create function enforce_two_members() returns trigger language plpgsql as $$
-begin
-  if (select count(*) from vault_members where vault_id = new.vault_id) >= 2 then
-    raise exception 'This vault already has two members';
-  end if;
-  return new;
-end $$;
-create trigger vault_two_max before insert on vault_members
-  for each row execute function enforce_two_members();
+-- Multi-member vaults supported (previous 2-member limit trigger removed)
 
 create table contributions (
   id uuid primary key default gen_random_uuid(),
@@ -54,7 +45,7 @@ create table loans (
   amount numeric(12,2) not null check (amount > 0),
   repaid numeric(12,2) not null default 0,
   purpose text,
-  status text not null default 'active' check (status in ('active','repaid')),
+  status text not null default 'pending' check (status in ('pending','active','repaid','rejected')),
   created_at timestamptz not null default now()
 );
 
@@ -115,6 +106,34 @@ begin
     status = case when repaid + p_amount >= amount then 'repaid' else 'active' end
   where id = p_loan returning * into l;
   return l;
+end $$;
+
+create function approve_loan(p_loan uuid, p_user uuid)
+returns loans language plpgsql as $$
+declare v_avail numeric; v_loan loans;
+begin
+  select * into v_loan from loans where id = p_loan for update;
+  if not found then raise exception 'Loan request not found'; end if;
+  if v_loan.status <> 'pending' then raise exception 'Loan is not in pending status'; end if;
+  if v_loan.borrower_id = p_user then raise exception 'You cannot approve your own loan request'; end if;
+  select available into v_avail from vault_balances where vault_id = v_loan.vault_id;
+  if v_loan.amount > v_avail then
+    raise exception 'Not enough savings. Available: %', v_avail;
+  end if;
+  update loans set status = 'active' where id = p_loan returning * into v_loan;
+  return v_loan;
+end $$;
+
+create function reject_loan(p_loan uuid, p_user uuid)
+returns loans language plpgsql as $$
+declare v_loan loans;
+begin
+  select * into v_loan from loans where id = p_loan for update;
+  if not found then raise exception 'Loan request not found'; end if;
+  if v_loan.status <> 'pending' then raise exception 'Loan is not in pending status'; end if;
+  if v_loan.borrower_id = p_user then raise exception 'Borrowers cannot reject their own loan'; end if;
+  update loans set status = 'rejected' where id = p_loan returning * into v_loan;
+  return v_loan;
 end $$;
 
 -- The backend uses the service role key, so lock the tables from direct client access.

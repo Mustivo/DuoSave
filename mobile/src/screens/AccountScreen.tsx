@@ -56,12 +56,6 @@ export default function AccountScreen() {
     setDay(String(v.reminder_day));
   }, [v?.id]);
 
-  useEffect(() => {
-    if (me?.partner?.name && !pName) {
-      setPName(me.partner.name);
-    }
-  }, [me?.partner?.name]);
-
   const saveSettings = async () => {
     setErr(null);
     try {
@@ -115,6 +109,8 @@ export default function AccountScreen() {
         name: pName.trim(),
         email: pEmail.trim().toLowerCase(),
       });
+      setPName('');
+      setPEmail('');
       setPSuccess(`Partner ${res.partner.name} (${res.partner.email}) is linked.`);
       setStatusConfig({
         visible: true,
@@ -130,13 +126,11 @@ export default function AccountScreen() {
     }
   };
 
-  const handleUnlinkPartner = () => {
-    if (!me?.partner) return;
-
+  const handleUnlinkPartner = (partnerToUnlink: { id: string; name: string }) => {
     setConfirmConfig({
       visible: true,
       title: 'Unlink Partner?',
-      message: `Are you sure you want to remove ${me.partner.name} from this vault? They will lose access to shared savings.`,
+      message: `Are you sure you want to remove ${partnerToUnlink.name} from this vault? They will lose access to shared savings.`,
       icon: 'person-remove-outline',
       confirmLabel: 'Unlink Partner',
       isDestructive: true,
@@ -145,12 +139,12 @@ export default function AccountScreen() {
         setPBusy(true);
         setPErr(null);
         try {
-          await api.delete('/vault/partner');
+          await api.delete(`/vault/partner?userId=${partnerToUnlink.id}`);
           await refreshMe();
           setStatusConfig({
             visible: true,
             title: 'Partner Unlinked',
-            message: 'Partner has been safely removed from this vault.',
+            message: `${partnerToUnlink.name} has been safely removed from this vault.`,
             type: 'info',
           });
         } catch (e: any) {
@@ -177,6 +171,8 @@ export default function AccountScreen() {
     });
   };
 
+  const partnersList = me?.partners && me.partners.length > 0 ? me.partners : (me?.partner ? [me.partner] : []);
+
   return (
     <Screen title="Account">
       <Card>
@@ -189,7 +185,11 @@ export default function AccountScreen() {
           )}
         </View>
         {me?.profile?.email && <T muted size={13}>{me.profile.email}</T>}
-        <T muted size={13}>{me?.partner ? `Partner: ${me.partner.name}` : 'Waiting for partner account setup'}</T>
+        <T muted size={13}>
+          {partnersList.length > 0
+            ? `Linked Partners (${partnersList.length}): ${partnersList.map((p) => p.name).join(', ')}`
+            : 'No partners linked yet'}
+        </T>
         {v && <T size={13} muted>Invite code: <T weight="700" color={c.accent}>{v.invite_code}</T></T>}
       </Card>
 
@@ -197,45 +197,66 @@ export default function AccountScreen() {
       {isVaultOwner && (
         <Card>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <T weight="700" size={16}>Manage Partner Account</T>
+            <T weight="700" size={16}>Vault Partners ({partnersList.length})</T>
             <View style={{ backgroundColor: c.accent + '18', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
               <T size={11} weight="600" color={c.accent}>Admin Only</T>
             </View>
           </View>
           <T size={13} muted>
-            Create an account for your partner. They will receive a code to choose their own password.
+            Create accounts for partners to link them to your shared vault. Each partner will receive an email code to set up their password.
           </T>
-          {me?.partner && (
-            <View style={{ backgroundColor: c.cardAlt, padding: 12, borderRadius: 10, gap: 10 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <View style={{ flex: 1 }}>
-                  <T size={13} weight="600">Currently Linked Partner: <T color={c.accent}>{me.partner.name}</T></T>
-                  {me.partner.email ? <T size={12} muted>{me.partner.email}</T> : null}
-                </View>
-                <Pressable
-                  onPress={handleUnlinkPartner}
-                  disabled={pBusy}
-                  style={({ pressed }) => ({
+
+          {partnersList.length > 0 && (
+            <View style={{ gap: 8, marginTop: 4 }}>
+              <T size={12} weight="700" muted>CONNECTED MEMBERS</T>
+              {partnersList.map((partner) => (
+                <View
+                  key={partner.id}
+                  style={{
+                    backgroundColor: c.cardAlt,
+                    padding: 12,
+                    borderRadius: 10,
                     flexDirection: 'row',
+                    justifyContent: 'space-between',
                     alignItems: 'center',
-                    gap: 4,
-                    backgroundColor: c.danger + '20',
-                    paddingHorizontal: 10,
-                    paddingVertical: 6,
-                    borderRadius: 8,
-                    opacity: pressed || pBusy ? 0.6 : 1,
-                  })}>
-                  <Ionicons name="person-remove-outline" size={16} color={c.danger} />
-                  <T size={12} weight="700" color={c.danger}>Unlink</T>
-                </Pressable>
-              </View>
+                  }}>
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Ionicons name="person-circle-outline" size={20} color={c.accent} />
+                      <T size={14} weight="700">{partner.name}</T>
+                    </View>
+                    {partner.email ? <T size={12} muted>{partner.email}</T> : null}
+                  </View>
+                  <Pressable
+                    onPress={() => handleUnlinkPartner(partner)}
+                    disabled={pBusy}
+                    hitSlop={8}
+                    style={({ pressed }) => ({
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 4,
+                      backgroundColor: c.danger + '20',
+                      paddingHorizontal: 10,
+                      paddingVertical: 6,
+                      borderRadius: 8,
+                      opacity: pressed || pBusy ? 0.6 : 1,
+                    })}>
+                    <Ionicons name="person-remove-outline" size={15} color={c.danger} />
+                    <T size={12} weight="700" color={c.danger}>Unlink</T>
+                  </Pressable>
+                </View>
+              ))}
             </View>
           )}
-          <Input label="Partner Name" placeholder="e.g. Partner Name" value={pName} onChangeText={setPName} />
-          <Input label="Partner Email" placeholder="partner@email.com" keyboardType="email-address" autoCapitalize="none" value={pEmail} onChangeText={setPEmail} />
-          {pSuccess && <T size={13} color={c.accent} weight="600">{pSuccess}</T>}
-          <ErrorText msg={pErr} />
-          <Button label={pBusy ? 'Saving...' : 'Create & Link Partner'} onPress={handleSavePartner} loading={pBusy} />
+
+          <View style={{ marginTop: 8, gap: 6 }}>
+            <T size={13} weight="700">Add New Partner Account</T>
+            <Input label="Partner Name" placeholder="e.g. Marie" value={pName} onChangeText={setPName} />
+            <Input label="Partner Email" placeholder="marie@email.com" keyboardType="email-address" autoCapitalize="none" value={pEmail} onChangeText={setPEmail} />
+            {pSuccess && <T size={13} color={c.accent} weight="600">{pSuccess}</T>}
+            <ErrorText msg={pErr} />
+            <Button label={pBusy ? 'Saving...' : '+ Link New Partner'} onPress={handleSavePartner} loading={pBusy} />
+          </View>
         </Card>
       )}
 

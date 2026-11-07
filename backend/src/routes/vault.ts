@@ -17,20 +17,43 @@ vault.get('/me', h(async (req, res) => {
   res.setHeader('Cache-Control', 'private, max-age=5, stale-while-revalidate=30');
   const { data: profile } = await admin.from('profiles').select('id,name').eq('id', req.userId).single();
   let vId = req.vaultId;
-  if (!vId) return res.json({ profile, vault: null, partner: null });
+  if (!vId) return res.json({ profile, vault: null, partner: null, partners: [] });
   const { data: v } = await admin.from('vaults').select('*').eq('id', vId).single();
-  const { data: ms } = await admin.from('vault_members').select('user_id').eq('vault_id', vId);
-  const partnerId = (ms ?? []).map((m) => m.user_id).find((id) => id !== req.userId);
-  const { data: partner } = partnerId
-    ? await admin.from('profiles').select('id,name').eq('id', partnerId).single()
-    : { data: null };
-  res.json({ profile: { ...profile, email: req.userEmail }, vault: v, partner, isAdmin: v?.created_by === req.userId });
+  const { data: ms } = await admin.from('vault_members').select('user_id, joined_at').eq('vault_id', vId);
+  const partnerIds = (ms ?? []).map((m) => m.user_id).filter((id) => id !== req.userId);
+  const { data: partnerProfiles } = partnerIds.length
+    ? await admin.from('profiles').select('id,name').in('id', partnerIds)
+    : { data: [] };
+
+  const partners = await Promise.all((partnerProfiles ?? []).map(async (p) => {
+    let email: string | undefined;
+    try {
+      const u = await admin.auth.admin.getUserById(p.id);
+      email = u.data.user?.email;
+    } catch {}
+    return {
+      id: p.id,
+      name: p.name,
+      email,
+      joined_at: (ms ?? []).find((m) => m.user_id === p.id)?.joined_at,
+    };
+  }));
+
+  const partner = partners.length > 0 ? partners[0] : null;
+  res.json({
+    profile: { ...profile, email: req.userEmail },
+    vault: v,
+    partner,
+    partners,
+    membersCount: (ms ?? []).length,
+    isAdmin: v?.created_by === req.userId,
+  });
 }));
 
 vault.post('/vault/partner', requireVault, h(async (req, res) => {
   const { data: v } = await admin.from('vaults').select('*').eq('id', req.vaultId!).single();
   if (v?.created_by !== req.userId) {
-    throw new HttpError(403, 'Only the vault owner can create or manage the partner account');
+    throw new HttpError(403, 'Only the vault owner can create or manage partner accounts');
   }
 
   const b = z.object({
@@ -51,15 +74,9 @@ vault.post('/vault/partner', requireVault, h(async (req, res) => {
 
   await admin.from('profiles').upsert({ id: partnerUser.id, name: b.name.trim() });
 
-  const { data: members } = await admin.from('vault_members').select('user_id').eq('vault_id', req.vaultId!);
-  for (const m of members ?? []) {
-    if (m.user_id !== req.userId && m.user_id !== partnerUser.id) {
-      await admin.from('vault_members').delete().eq('vault_id', req.vaultId!).eq('user_id', m.user_id);
-    }
-  }
-
+  // Add new member to vault without deleting existing members
   await admin.from('vault_members').upsert({ vault_id: req.vaultId!, user_id: partnerUser.id });
-  await logAndAlertPartner(req.vaultId!, req.userId, 'join', `${b.name} was linked as your partner`);
+  await logAndAlertPartner(req.vaultId!, req.userId, 'join', `${b.name} was linked as a new vault partner`);
 
   const { data: adminProf } = await admin.from('profiles').select('name').eq('id', req.userId).maybeSingle();
   const adminName = adminProf?.name || 'your partner';
@@ -80,16 +97,46 @@ vault.post('/vault/partner', requireVault, h(async (req, res) => {
 vault.delete('/vault/partner', requireVault, h(async (req, res) => {
   const { data: v } = await admin.from('vaults').select('*').eq('id', req.vaultId!).single();
   if (v?.created_by !== req.userId) {
-    throw new HttpError(403, 'Only the vault owner can unlink the partner');
+    throw new HttpError(403, 'Only the vault owner can unlink partners');
   }
+
+  const targetUserId = (req.query.userId as string) || (req.body?.userId as string);
+  if (targetUserId) {
+    if (targetUserId === req.userId) {
+      throw new HttpError(400, 'Cannot unlink yourself as admin. Delete or transfer the vault instead.');
+    }
+    const { data: pProfile } = await admin.from('profiles').select('name').eq('id', targetUserId).maybeSingle();
+    const partnerName = pProfile?.name || 'Partner';
+    await admin.from('vault_members').delete().eq('vault_id', req.vaultId!).eq('user_id', targetUserId);
+    await logAndAlertPartner(req.vaultId!, req.userId, 'join', `${partnerName} was unlinked from the vault`);
+    return res.json({ ok: true, message: `${partnerName} was unlinked` });
+  }
+
+  // Fallback: unlink all other members
   const { data: members } = await admin.from('vault_members').select('user_id').eq('vault_id', req.vaultId!);
   for (const m of members ?? []) {
     if (m.user_id !== req.userId) {
       await admin.from('vault_members').delete().eq('vault_id', req.vaultId!).eq('user_id', m.user_id);
     }
   }
-  await logAndAlertPartner(req.vaultId!, req.userId, 'join', 'Partner was unlinked from the vault');
+  await logAndAlertPartner(req.vaultId!, req.userId, 'join', 'Partners were unlinked from the vault');
   res.json({ ok: true });
+}));
+
+vault.delete('/vault/partner/:userId', requireVault, h(async (req, res) => {
+  const { data: v } = await admin.from('vaults').select('*').eq('id', req.vaultId!).single();
+  if (v?.created_by !== req.userId) {
+    throw new HttpError(403, 'Only the vault owner can unlink partners');
+  }
+  const targetUserId = req.params.userId;
+  if (targetUserId === req.userId) {
+    throw new HttpError(400, 'Cannot unlink yourself as admin. Delete or transfer the vault instead.');
+  }
+  const { data: pProfile } = await admin.from('profiles').select('name').eq('id', targetUserId).maybeSingle();
+  const partnerName = pProfile?.name || 'Partner';
+  await admin.from('vault_members').delete().eq('vault_id', req.vaultId!).eq('user_id', targetUserId);
+  await logAndAlertPartner(req.vaultId!, req.userId, 'join', `${partnerName} was unlinked from the vault`);
+  res.json({ ok: true, message: `${partnerName} was unlinked` });
 }));
 
 vault.put('/me/push-token', h(async (req, res) => {
@@ -115,12 +162,12 @@ vault.post('/vault/join', h(async (req, res) => {
   if (req.vaultId) throw new HttpError(400, 'You already belong to a vault');
   const { code } = z.object({ code: z.string().min(4) }).parse(req.body);
   const { data: v } = await admin.from('vaults').select('*').eq('invite_code', code.trim().toUpperCase()).maybeSingle();
-  if (!v) throw new HttpError(404, 'No vault found with that code');
-  const { count } = await admin.from('vault_members').select('*', { count: 'exact', head: true }).eq('vault_id', v.id);
-  if ((count ?? 0) >= 2) throw new HttpError(400, 'This vault is limited to 2 partners and is already full');
+  if (!v) throw new HttpError(404, 'No vault found with that invite code');
   const { error } = await admin.from('vault_members').insert({ vault_id: v.id, user_id: req.userId });
   if (error) throw new HttpError(400, error.message);
-  await logAndAlertPartner(v.id, req.userId, 'join', 'Your partner joined the vault');
+  const { data: p } = await admin.from('profiles').select('name').eq('id', req.userId).maybeSingle();
+  const userName = p?.name || 'A new partner';
+  await logAndAlertPartner(v.id, req.userId, 'join', `${userName} joined the vault`);
   res.json(v);
 }));
 

@@ -34,27 +34,183 @@ money.get('/savings', h(async (req, res) => {
   res.json(data ?? []);
 }));
 
-/* ---------- Loans: taken automatically, the shared total drops right away ---------- */
+/* ---------- Loans: request, approval, rejection, cancellation, and repayment ---------- */
 money.post('/loans', h(async (req, res) => {
   const b = z.object({ amount, purpose: z.string().max(80).optional() }).parse(req.body);
-  const { data, error } = await admin.rpc('take_loan', {
-    p_vault: req.vaultId!, p_user: req.userId, p_amount: b.amount, p_purpose: b.purpose ?? null,
-  });
-  if (error) throw new HttpError(400, error.message);
-  await logAndAlertPartner(req.vaultId!, req.userId, 'loan',
-    `${await nameOf(req.userId)} took a loan of ${b.amount}${b.purpose ? ` for ${b.purpose}` : ''}`, b.amount);
-  res.json(data);
+
+  // Check available vault balance before creating request
+  const { data: bal } = await admin.from('vault_balances').select('available').eq('vault_id', req.vaultId!).single();
+  const available = Number(bal?.available ?? 0);
+  if (b.amount > available) {
+    throw new HttpError(400, `The requested loan (${b.amount}) exceeds currently available vault savings (${available}).`);
+  }
+
+  // Create loan with 'pending' status awaiting partner approval
+  const { data, error } = await admin.from('loans').insert({
+    vault_id: req.vaultId!,
+    borrower_id: req.userId,
+    amount: b.amount,
+    purpose: b.purpose ?? null,
+    status: 'pending',
+  }).select().single();
+
+  if (error) {
+    if (error.code === '23514' || error.message.includes('check constraint')) {
+      throw new HttpError(400, 'Loan approval feature requires database update. Please run the SQL migration in Supabase SQL editor.');
+    }
+    throw new HttpError(400, error.message);
+  }
+
+  const requesterName = await nameOf(req.userId);
+  await logAndAlertPartner(
+    req.vaultId!,
+    req.userId,
+    'loan',
+    `Loan Request: ${requesterName} requested a loan of ${b.amount}${b.purpose ? ` for ${b.purpose}` : ''}. Waiting for partner approval.`,
+    b.amount,
+  );
+
+  res.json({ ...data, requester_name: requesterName });
 }));
 
 money.get('/loans', h(async (req, res) => {
   res.setHeader('Cache-Control', 'private, max-age=5, stale-while-revalidate=30');
-  const { data } = await admin.from('loans').select('*')
+  const { data: loans } = await admin.from('loans').select('*')
     .eq('vault_id', req.vaultId!).order('created_at', { ascending: false });
-  res.json(data ?? []);
+
+  const { data: profiles } = await admin.from('profiles').select('id, name');
+  const profileMap = new Map((profiles ?? []).map((p) => [p.id, p.name]));
+
+  const enriched = (loans ?? []).map((l) => ({
+    ...l,
+    requester_name: profileMap.get(l.borrower_id) || 'Partner',
+  }));
+
+  res.json(enriched);
+}));
+
+money.post('/loans/:id/approve', h(async (req, res) => {
+  const { data: loan } = await admin.from('loans').select('*').eq('id', req.params.id).eq('vault_id', req.vaultId!).maybeSingle();
+  if (!loan) throw new HttpError(404, 'Loan request not found');
+
+  if (loan.status !== 'pending') {
+    throw new HttpError(400, `This loan is already ${loan.status}`);
+  }
+
+  if (loan.borrower_id === req.userId) {
+    throw new HttpError(403, 'You cannot approve your own loan request. A partner must approve it.');
+  }
+
+  // Check vault balance
+  const { data: bal } = await admin.from('vault_balances').select('available').eq('vault_id', req.vaultId!).single();
+  const available = Number(bal?.available ?? 0);
+  if (Number(loan.amount) > available) {
+    throw new HttpError(400, `Insufficient vault savings to approve this loan. Available: ${available}`);
+  }
+
+  // Try RPC approve_loan first, fallback to direct update
+  let updatedLoan = null;
+  const { data: rpcData, error: rpcErr } = await admin.rpc('approve_loan', { p_loan: loan.id, p_user: req.userId });
+  if (!rpcErr && rpcData) {
+    updatedLoan = rpcData;
+  } else {
+    const { data: upd, error: updErr } = await admin.from('loans').update({ status: 'active' }).eq('id', loan.id).select().single();
+    if (updErr) throw new HttpError(400, updErr.message);
+    updatedLoan = upd;
+  }
+
+  const borrowerName = await nameOf(loan.borrower_id);
+  const approverName = await nameOf(req.userId);
+
+  await logAndAlertPartner(
+    req.vaultId!,
+    req.userId,
+    'loan',
+    `Loan Approved: ${borrowerName}'s loan of ${loan.amount} was approved by ${approverName}`,
+    loan.amount,
+  );
+
+  // Directly notify the borrower
+  await admin.from('notifications').insert({
+    vault_id: req.vaultId!,
+    user_id: loan.borrower_id,
+    type: 'partner',
+    title: 'Loan Approved! 🎉',
+    body: `Your loan of ${loan.amount} was approved by ${approverName}. The funds are now active.`,
+  });
+
+  res.json({ ok: true, loan: updatedLoan });
+}));
+
+money.post('/loans/:id/reject', h(async (req, res) => {
+  const { data: loan } = await admin.from('loans').select('*').eq('id', req.params.id).eq('vault_id', req.vaultId!).maybeSingle();
+  if (!loan) throw new HttpError(404, 'Loan request not found');
+
+  if (loan.status !== 'pending') {
+    throw new HttpError(400, `This loan is already ${loan.status}`);
+  }
+
+  if (loan.borrower_id === req.userId) {
+    throw new HttpError(403, 'Borrowers cannot reject their own loan. Use cancel instead.');
+  }
+
+  const { data: updated, error } = await admin.from('loans').update({ status: 'rejected' }).eq('id', loan.id).select().single();
+  if (error) throw new HttpError(400, error.message);
+
+  const borrowerName = await nameOf(loan.borrower_id);
+  const rejecterName = await nameOf(req.userId);
+
+  await logAndAlertPartner(
+    req.vaultId!,
+    req.userId,
+    'loan',
+    `Loan Request Declined: ${borrowerName}'s loan request of ${loan.amount} was declined by ${rejecterName}`,
+    loan.amount,
+  );
+
+  await admin.from('notifications').insert({
+    vault_id: req.vaultId!,
+    user_id: loan.borrower_id,
+    type: 'partner',
+    title: 'Loan Request Declined',
+    body: `Your loan request of ${loan.amount} was declined by ${rejecterName}.`,
+  });
+
+  res.json({ ok: true, loan: updated });
+}));
+
+money.post('/loans/:id/cancel', h(async (req, res) => {
+  const { data: loan } = await admin.from('loans').select('*').eq('id', req.params.id).eq('vault_id', req.vaultId!).maybeSingle();
+  if (!loan) throw new HttpError(404, 'Loan request not found');
+
+  if (loan.borrower_id !== req.userId) {
+    throw new HttpError(403, 'Only the borrower can cancel their pending loan request');
+  }
+
+  if (loan.status !== 'pending') {
+    throw new HttpError(400, 'Only pending loan requests can be cancelled');
+  }
+
+  await admin.from('loans').delete().eq('id', loan.id);
+  const requesterName = await nameOf(req.userId);
+
+  await logAndAlertPartner(
+    req.vaultId!,
+    req.userId,
+    'loan',
+    `${requesterName} cancelled their loan request of ${loan.amount}`,
+    loan.amount,
+  );
+
+  res.json({ ok: true, cancelled: true });
 }));
 
 money.post('/loans/:id/repay', h(async (req, res) => {
   const b = z.object({ amount }).parse(req.body);
+  const { data: l } = await admin.from('loans').select('status').eq('id', req.params.id).maybeSingle();
+  if (!l) throw new HttpError(404, 'Loan not found');
+  if (l.status !== 'active') throw new HttpError(400, 'Only active loans can be repaid');
+
   const { data, error } = await admin.rpc('repay_loan', {
     p_loan: req.params.id, p_user: req.userId, p_amount: b.amount,
   });

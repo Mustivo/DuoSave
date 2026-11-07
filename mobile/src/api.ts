@@ -39,13 +39,70 @@ async function raw(method: string, path: string, body?: unknown) {
   });
 }
 
+export function humanizeErrorMessage(rawError: any, status?: number): string {
+  if (!rawError) return 'An unexpected error occurred. Please try again.';
+
+  let msg = typeof rawError === 'string' ? rawError : (rawError?.message || rawError?.error || '');
+  if (typeof msg !== 'string') msg = JSON.stringify(msg);
+
+  // Network & Connectivity issues
+  if (/network request failed|failed to fetch|cannot reach|timeout|enotfound|econnrefused/i.test(msg)) {
+    return 'Unable to connect to DuoSave servers. Please check your internet connection.';
+  }
+
+  // Session & Authentication
+  if (status === 401 || /jwt|unauthorized|invalid token|session expired/i.test(msg)) {
+    return 'Your session has expired. Please sign in again to continue.';
+  }
+  if (status === 403 || /forbidden|permission|only the vault/i.test(msg)) {
+    return typeof rawError === 'string' && rawError.length < 80 && !rawError.includes('Error:')
+      ? rawError
+      : 'You do not have permission to perform this action.';
+  }
+
+  // Specific database and business logic patterns
+  if (/loans_status_check|violates check constraint/i.test(msg)) {
+    return 'Loan approval feature requires database update. Please run the SQL migration in Supabase SQL editor.';
+  }
+  if (/exceeds currently available|not enough savings|insufficient/i.test(msg)) {
+    return 'The requested loan exceeds the available savings currently in the vault.';
+  }
+  if (/already registered|user already exists|duplicate key/i.test(msg)) {
+    return 'This email address is already associated with an existing account.';
+  }
+  if (/no vault found/i.test(msg)) {
+    return 'No vault found with that invite code. Please double-check and try again.';
+  }
+  if (/already belong to a vault/i.test(msg)) {
+    return 'You already belong to an active vault.';
+  }
+  if (/cannot delete a loan that has partial repayments/i.test(msg)) {
+    return 'Cannot delete a loan that has already been partially repaid.';
+  }
+
+  // Hide raw JSON or code-like errors
+  if (msg.startsWith('{') || msg.startsWith('[') || /code: '\d+'/i.test(msg) || /pgrst\d+/i.test(msg)) {
+    return 'Something went wrong while processing your request. Please try again.';
+  }
+
+  // Server 500 fallback
+  if (status && status >= 500) {
+    return 'The server encountered a temporary hiccup. Please try again in a few moments.';
+  }
+
+  // Clean and capitalize
+  const cleaned = msg.replace(/^Error:\s*/i, '').trim();
+  if (!cleaned) return 'Something went wrong. Please try again.';
+  return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+}
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   let res: Response;
   try {
     res = await raw(method, path, body);
   } catch (e: any) {
     console.warn(`[API] Failed: ${method} ${BASE}${path}:`, e?.message);
-    throw new Error(`Cannot reach the server. Pull down to retry or check your connection.`);
+    throw new Error(humanizeErrorMessage(e?.message));
   }
 
   if (res.status === 401 && refreshToken && !path.startsWith('/auth')) {
@@ -68,7 +125,8 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   try { json = JSON.parse(text); } catch {}
   if (!res.ok) {
     console.warn(`[API] Error ${res.status} from ${method} ${path}:`, json.error || text);
-    throw new Error(json.error ?? (text && text.length < 120 ? text : 'Something went wrong'));
+    const rawError = json.error ?? (text && text.length < 120 ? text : 'Something went wrong');
+    throw new Error(humanizeErrorMessage(rawError, res.status));
   }
   return json as T;
 }
