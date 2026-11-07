@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { Alert, Pressable, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '../api';
 import { useAuth } from '../auth';
 import { useTheme } from '../theme';
 import { Loan, Summary } from '../types';
-import { Button, Card, ErrorText, Input, Screen, T, money, useLoad } from '../ui';
+import { Button, Card, ConfirmModal, ErrorText, Input, Screen, T, money, useLoad } from '../ui';
 
 export default function LoansScreen() {
   const { c } = useTheme();
@@ -14,9 +14,27 @@ export default function LoansScreen() {
     const [summary, loans] = await Promise.all([api.get<Summary>('/vault/summary'), api.get<Loan[]>('/loans')]);
     return { summary, loans };
   });
-  const [amount, setAmount] = useState(''); const [purpose, setPurpose] = useState('');
+  const [amount, setAmount] = useState('');
+  const [purpose, setPurpose] = useState('');
   const [repay, setRepay] = useState<Record<string, string>>({});
-  const [err, setErr] = useState<string | null>(null); const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  // Modern Confirmation Modal state
+  const [confirmConfig, setConfirmConfig] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    icon?: keyof typeof Ionicons.glyphMap;
+    confirmLabel?: string;
+    isDestructive?: boolean;
+    onConfirm: () => void;
+  }>({
+    visible: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
 
   const cur = data?.summary.vault.currency ?? 'RWF';
   const nameOf = (id: string) => data?.summary.members.find((m) => m.id === id)?.name ?? 'Partner';
@@ -24,42 +42,61 @@ export default function LoansScreen() {
   const take = () => {
     const n = parseFloat(amount.replace(',', '.'));
     if (!(n > 0)) { setErr('Enter an amount greater than 0'); return; }
-    Alert.alert('Take this loan?', `${money(n, cur)} leaves the shared savings right away. Your partner will be told.`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Take loan', onPress: async () => {
+
+    setConfirmConfig({
+      visible: true,
+      title: 'Take this Loan?',
+      message: `${money(n, cur)} will leave the shared savings immediately. Your partner will be notified.`,
+      icon: 'cash-outline',
+      confirmLabel: 'Take Loan',
+      isDestructive: false,
+      onConfirm: async () => {
+        setConfirmConfig((prev) => ({ ...prev, visible: false }));
         setBusy(true); setErr(null);
-        try { await api.post('/loans', { amount: n, purpose: purpose || undefined }); setAmount(''); setPurpose(''); await reload(); }
-        catch (e: any) { setErr(e.message); }
+        try {
+          await api.post('/loans', { amount: n, purpose: purpose || undefined });
+          setAmount(''); setPurpose('');
+          await reload();
+        } catch (e: any) {
+          setErr(e.message);
+        }
         setBusy(false);
-      } },
-    ]);
+      },
+    });
   };
 
   const pay = async (id: string) => {
     const n = parseFloat((repay[id] ?? '').replace(',', '.'));
     if (!(n > 0)) { setErr('Enter a repayment amount'); return; }
     setErr(null);
-    try { await api.post(`/loans/${id}/repay`, { amount: n }); setRepay({ ...repay, [id]: '' }); await reload(); }
-    catch (e: any) { setErr(e.message); }
+    try {
+      await api.post(`/loans/${id}/repay`, { amount: n });
+      setRepay({ ...repay, [id]: '' });
+      await reload();
+    } catch (e: any) {
+      setErr(e.message);
+    }
   };
 
   const confirmDeleteLoan = (id: string, loanAmount: number | string) => {
-    Alert.alert('Delete Loan', `Are you sure you want to remove this loan of ${money(Number(loanAmount), cur)}?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          setErr(null);
-          try {
-            await api.delete(`/loans/${id}`);
-            await reload();
-          } catch (e: any) {
-            setErr(e.message);
-          }
-        },
+    setConfirmConfig({
+      visible: true,
+      title: 'Delete Loan Record?',
+      message: `Are you sure you want to remove this loan of ${money(Number(loanAmount), cur)}? The available vault balance will be updated immediately.`,
+      icon: 'trash-outline',
+      confirmLabel: 'Delete Loan',
+      isDestructive: true,
+      onConfirm: async () => {
+        setConfirmConfig((prev) => ({ ...prev, visible: false }));
+        setErr(null);
+        try {
+          await api.delete(`/loans/${id}`);
+          await reload();
+        } catch (e: any) {
+          setErr(e.message);
+        }
       },
-    ]);
+    });
   };
 
   return (
@@ -75,7 +112,7 @@ export default function LoansScreen() {
       <Card>
         <T weight="700" size={16}>Take a loan</T>
         <Input label={`Amount (${cur})`} value={amount} onChangeText={setAmount} keyboardType="decimal-pad" placeholder="0.00" />
-        <Input label="Purpose (optional)" value={purpose} onChangeText={setPurpose} placeholder="Flight tickets" />
+        <Input label="Purpose (optional)" value={purpose} onChangeText={setPurpose} placeholder="Flight tickets, repair, emergency..." />
         <ErrorText msg={err} />
         <Button label="Take loan" onPress={take} loading={busy} />
       </Card>
@@ -111,6 +148,18 @@ export default function LoansScreen() {
           </Card>
         );
       })}
+
+      {/* Modern Confirmation Popup */}
+      <ConfirmModal
+        visible={confirmConfig.visible}
+        title={confirmConfig.title}
+        message={confirmConfig.message}
+        icon={confirmConfig.icon}
+        confirmLabel={confirmConfig.confirmLabel}
+        isDestructive={confirmConfig.isDestructive}
+        onConfirm={confirmConfig.onConfirm}
+        onCancel={() => setConfirmConfig((prev) => ({ ...prev, visible: false }))}
+      />
     </Screen>
   );
 }

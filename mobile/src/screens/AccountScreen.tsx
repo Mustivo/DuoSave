@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, Pressable, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '../api';
 import { useAuth } from '../auth';
 import { Mode, useTheme } from '../theme';
-import { Button, Card, ErrorText, Input, Screen, T } from '../ui';
+import { Button, Card, ConfirmModal, ErrorText, Input, Screen, StatusModal, T } from '../ui';
 
 export default function AccountScreen() {
   const { c, mode, setMode } = useTheme();
@@ -21,6 +21,33 @@ export default function AccountScreen() {
   const [pBusy, setPBusy] = useState(false);
   const [pErr, setPErr] = useState<string | null>(null);
   const [pSuccess, setPSuccess] = useState<string | null>(null);
+
+  // Modern Confirmation & Status Modal States
+  const [confirmConfig, setConfirmConfig] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    icon?: keyof typeof Ionicons.glyphMap;
+    confirmLabel?: string;
+    isDestructive?: boolean;
+    onConfirm: () => void;
+  }>({
+    visible: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
+
+  const [statusConfig, setStatusConfig] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    type?: 'success' | 'error' | 'info';
+  }>({
+    visible: false,
+    title: '',
+    message: '',
+  });
 
   useEffect(() => {
     if (!v) return;
@@ -44,7 +71,12 @@ export default function AccountScreen() {
         reminder_day: parseInt(day, 10) || 1,
       });
       await refreshMe();
-      Alert.alert('Saved', 'Vault settings updated.');
+      setStatusConfig({
+        visible: true,
+        title: 'Plan Saved',
+        message: 'Your vault savings goals and notification schedule have been updated.',
+        type: 'success',
+      });
     } catch (e: any) {
       setErr(e.message);
     }
@@ -53,7 +85,12 @@ export default function AccountScreen() {
   const remindNow = async () => {
     try {
       await api.post('/vault/remind');
-      Alert.alert('Sent', 'Both of you were asked to save.');
+      setStatusConfig({
+        visible: true,
+        title: 'Reminder Sent',
+        message: 'A savings notification was sent to both partner accounts.',
+        type: 'success',
+      });
     } catch (e: any) {
       setErr(e.message);
     }
@@ -78,8 +115,13 @@ export default function AccountScreen() {
         name: pName.trim(),
         email: pEmail.trim().toLowerCase(),
       });
-      setPSuccess(`Partner ${res.partner.name} (${res.partner.email}) is linked. A secure password-setup code was emailed to them.`);
-      Alert.alert('Partner Account Ready', `Account for ${res.partner.name} (${res.partner.email}) was created. They will receive a secure code to choose their own password.`);
+      setPSuccess(`Partner ${res.partner.name} (${res.partner.email}) is linked.`);
+      setStatusConfig({
+        visible: true,
+        title: 'Partner Linked',
+        message: `Account for ${res.partner.name} (${res.partner.email}) was created. A secure password setup code was emailed to them.`,
+        type: 'success',
+      });
       await refreshMe();
     } catch (e: any) {
       setPErr(e.message);
@@ -90,30 +132,49 @@ export default function AccountScreen() {
 
   const handleUnlinkPartner = () => {
     if (!me?.partner) return;
-    Alert.alert(
-      'Unlink Partner',
-      `Are you sure you want to remove ${me.partner.name} from this vault? They will lose access to shared savings.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Unlink',
-          style: 'destructive',
-          onPress: async () => {
-            setPBusy(true);
-            setPErr(null);
-            try {
-              await api.delete('/vault/partner');
-              await refreshMe();
-              Alert.alert('Partner Removed', 'Partner has been unlinked from this vault.');
-            } catch (e: any) {
-              setPErr(e.message);
-            } finally {
-              setPBusy(false);
-            }
-          },
-        },
-      ]
-    );
+
+    setConfirmConfig({
+      visible: true,
+      title: 'Unlink Partner?',
+      message: `Are you sure you want to remove ${me.partner.name} from this vault? They will lose access to shared savings.`,
+      icon: 'person-remove-outline',
+      confirmLabel: 'Unlink Partner',
+      isDestructive: true,
+      onConfirm: async () => {
+        setConfirmConfig((prev) => ({ ...prev, visible: false }));
+        setPBusy(true);
+        setPErr(null);
+        try {
+          await api.delete('/vault/partner');
+          await refreshMe();
+          setStatusConfig({
+            visible: true,
+            title: 'Partner Unlinked',
+            message: 'Partner has been safely removed from this vault.',
+            type: 'info',
+          });
+        } catch (e: any) {
+          setPErr(e.message);
+        } finally {
+          setPBusy(false);
+        }
+      },
+    });
+  };
+
+  const confirmSignOut = () => {
+    setConfirmConfig({
+      visible: true,
+      title: 'Sign Out?',
+      message: 'Are you sure you want to log out of your DuoSave account on this device?',
+      icon: 'log-out-outline',
+      confirmLabel: 'Log Out',
+      isDestructive: true,
+      onConfirm: () => {
+        setConfirmConfig((prev) => ({ ...prev, visible: false }));
+        signOut();
+      },
+    });
   };
 
   return (
@@ -234,7 +295,29 @@ export default function AccountScreen() {
           <Button label="Send reminder now" variant="ghost" onPress={remindNow} />
         </Card>
       )}
-      <Button label="Log out" variant="danger" onPress={signOut} />
+
+      <Button label="Log out" variant="danger" onPress={confirmSignOut} />
+
+      {/* Modern Confirmation Popup */}
+      <ConfirmModal
+        visible={confirmConfig.visible}
+        title={confirmConfig.title}
+        message={confirmConfig.message}
+        icon={confirmConfig.icon}
+        confirmLabel={confirmConfig.confirmLabel}
+        isDestructive={confirmConfig.isDestructive}
+        onConfirm={confirmConfig.onConfirm}
+        onCancel={() => setConfirmConfig((prev) => ({ ...prev, visible: false }))}
+      />
+
+      {/* Modern Status/Alert Popup */}
+      <StatusModal
+        visible={statusConfig.visible}
+        title={statusConfig.title}
+        message={statusConfig.message}
+        type={statusConfig.type}
+        onClose={() => setStatusConfig((prev) => ({ ...prev, visible: false }))}
+      />
     </Screen>
   );
 }

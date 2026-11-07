@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { Alert, Pressable, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '../api';
 import { useAuth } from '../auth';
 import { useTheme } from '../theme';
 import { Notif, Summary } from '../types';
-import { Button, Card, ErrorText, Input, ProgressBar, Screen, T, money, useLoad } from '../ui';
+import { Button, Card, ErrorText, Input, ProgressBar, Screen, StatusModal, T, money, useLoad } from '../ui';
 
 export default function SavingsScreen() {
   const { c } = useTheme();
@@ -33,6 +33,18 @@ export default function SavingsScreen() {
   const [savingDay, setSavingDay] = useState(false);
   const [dismissedLocalReminder, setDismissedLocalReminder] = useState(false);
 
+  // Modern Status Modal State
+  const [statusConfig, setStatusConfig] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    type?: 'success' | 'error' | 'info';
+  }>({
+    visible: false,
+    title: '',
+    message: '',
+  });
+
   const isVaultOwner = Boolean(me?.vault?.created_by && me?.profile?.id && me.vault.created_by === me.profile.id);
 
   const save = async () => {
@@ -43,7 +55,12 @@ export default function SavingsScreen() {
       await api.post('/savings', { amount: n, note: note || undefined });
       setAmount(''); setNote('');
       await reload();
-      Alert.alert('Savings Added', `Successfully saved ${money(n, cur)}!`);
+      setStatusConfig({
+        visible: true,
+        title: 'Savings Added',
+        message: `Successfully contributed ${money(n, cur)} to the vault!`,
+        type: 'success',
+      });
     } catch (e: any) {
       setErr(e.message);
     }
@@ -57,9 +74,19 @@ export default function SavingsScreen() {
       await api.patch('/vault', { reminder_day: selectedDay });
       await Promise.all([reload(), refreshMe()]);
       setShowEditDay(false);
-      Alert.alert('Reminder Day Set', `Both partners will be notified on day ${selectedDay} of every month.`);
+      setStatusConfig({
+        visible: true,
+        title: 'Reminder Day Set',
+        message: `Both partners will see the notification banner on day ${selectedDay} of every month.`,
+        type: 'success',
+      });
     } catch (e: any) {
-      Alert.alert('Error', e.message);
+      setStatusConfig({
+        visible: true,
+        title: 'Error',
+        message: e.message,
+        type: 'error',
+      });
     } finally {
       setSavingDay(false);
     }
@@ -69,9 +96,19 @@ export default function SavingsScreen() {
     try {
       await api.post('/vault/remind');
       await reload();
-      Alert.alert('Reminder Sent', 'Both partners have been reminded on their dashboard!');
+      setStatusConfig({
+        visible: true,
+        title: 'Reminder Sent',
+        message: 'Both partners have been notified on their dashboard.',
+        type: 'success',
+      });
     } catch (e: any) {
-      Alert.alert('Error', e.message);
+      setStatusConfig({
+        visible: true,
+        title: 'Error',
+        message: e.message,
+        type: 'error',
+      });
     }
   };
 
@@ -200,7 +237,12 @@ export default function SavingsScreen() {
                 if (parsed >= 1 && parsed <= 28) {
                   handleUpdateReminderDay(parsed);
                 } else {
-                  Alert.alert('Invalid Day', 'Please enter a day between 1 and 28.');
+                  setStatusConfig({
+                    visible: true,
+                    title: 'Invalid Day',
+                    message: 'Please choose a day between 1 and 28.',
+                    type: 'error',
+                  });
                 }
               }}
             />
@@ -268,6 +310,15 @@ export default function SavingsScreen() {
           <T size={12} muted>They enter this code after creating an account.</T>
         </Card>
       )}
+
+      {/* Modern Status/Feedback Popup */}
+      <StatusModal
+        visible={statusConfig.visible}
+        title={statusConfig.title}
+        message={statusConfig.message}
+        type={statusConfig.type}
+        onClose={() => setStatusConfig((prev) => ({ ...prev, visible: false }))}
+      />
     </Screen>
   );
 }

@@ -1,10 +1,11 @@
 import React, { useCallback, useRef, useState } from 'react';
 import {
-  ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleProp, Text, TextStyle,
+  ActivityIndicator, Modal, Pressable, RefreshControl, ScrollView, StyleProp, Text, TextStyle,
   TextInput, TextInputProps, View, ViewStyle,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from './theme';
 import { useAuth } from './auth';
@@ -153,3 +154,221 @@ export const timeAgo = (iso: string) => {
   if (m < 1440) return `${Math.floor(m / 60)}h ago`;
   return new Date(iso).toLocaleDateString();
 };
+
+export interface ConfirmModalProps {
+  visible: boolean;
+  title: string;
+  message: string;
+  icon?: keyof typeof Ionicons.glyphMap;
+  iconColor?: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  isDestructive?: boolean;
+  loading?: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}
+
+/** Modern themed confirmation dialog popup with icon, backdrop and styled buttons */
+export function ConfirmModal({
+  visible,
+  title,
+  message,
+  icon,
+  iconColor,
+  confirmLabel = 'Confirm',
+  cancelLabel = 'Cancel',
+  isDestructive = false,
+  loading = false,
+  onConfirm,
+  onCancel,
+}: ConfirmModalProps) {
+  const { c } = useTheme();
+  const themeColor = iconColor ?? (isDestructive ? c.danger : c.accent);
+  const defaultIcon = icon ?? (isDestructive ? 'trash-outline' : 'alert-circle-outline');
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
+      <Pressable
+        onPress={onCancel}
+        style={{
+          flex: 1,
+          backgroundColor: 'rgba(0, 0, 0, 0.7)',
+          justifyContent: 'center',
+          alignItems: 'center',
+          padding: 24,
+        }}>
+        <Pressable
+          onPress={(e) => e.stopPropagation()}
+          style={{
+            width: '100%',
+            maxWidth: 360,
+            backgroundColor: c.card,
+            borderColor: c.border,
+            borderWidth: 1.5,
+            borderRadius: 24,
+            padding: 24,
+            alignItems: 'center',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 12 },
+            shadowOpacity: 0.4,
+            shadowRadius: 24,
+            elevation: 12,
+          }}>
+          {/* Top Circular Icon Badge */}
+          <View
+            style={{
+              width: 68,
+              height: 68,
+              borderRadius: 34,
+              backgroundColor: themeColor + '18',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: 16,
+              borderColor: themeColor + '30',
+              borderWidth: 1,
+            }}>
+            <Ionicons name={defaultIcon} size={32} color={themeColor} />
+          </View>
+
+          {/* Title */}
+          <Text
+            style={{
+              fontSize: 20,
+              fontWeight: '800',
+              color: c.text,
+              textAlign: 'center',
+              marginBottom: 8,
+            }}>
+            {title}
+          </Text>
+
+          {/* Message */}
+          <Text
+            style={{
+              fontSize: 14,
+              lineHeight: 20,
+              color: c.muted,
+              textAlign: 'center',
+              marginBottom: 24,
+            }}>
+            {message}
+          </Text>
+
+          {/* Action Buttons */}
+          <View style={{ flexDirection: 'row', gap: 12, width: '100%' }}>
+            {cancelLabel ? (
+              <View style={{ flex: 1 }}>
+                <Button label={cancelLabel} variant="ghost" disabled={loading} onPress={onCancel} />
+              </View>
+            ) : null}
+            <View style={{ flex: 1 }}>
+              <Button
+                label={confirmLabel}
+                variant={isDestructive ? 'danger' : 'primary'}
+                loading={loading}
+                onPress={onConfirm}
+              />
+            </View>
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+export interface StatusModalProps {
+  visible: boolean;
+  title: string;
+  message: string;
+  type?: 'success' | 'error' | 'info';
+  buttonLabel?: string;
+  onClose: () => void;
+}
+
+/** Styled information/status popup */
+export function StatusModal({
+  visible,
+  title,
+  message,
+  type = 'success',
+  buttonLabel = 'Got it',
+  onClose,
+}: StatusModalProps) {
+  const { c } = useTheme();
+  const color = type === 'error' ? c.danger : type === 'info' ? c.blue : c.accent;
+  const icon = type === 'error' ? 'close-circle-outline' : type === 'info' ? 'information-circle-outline' : 'checkmark-circle-outline';
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable
+        onPress={onClose}
+        style={{
+          flex: 1,
+          backgroundColor: 'rgba(0, 0, 0, 0.7)',
+          justifyContent: 'center',
+          alignItems: 'center',
+          padding: 24,
+        }}>
+        <Pressable
+          onPress={(e) => e.stopPropagation()}
+          style={{
+            width: '100%',
+            maxWidth: 360,
+            backgroundColor: c.card,
+            borderColor: c.border,
+            borderWidth: 1.5,
+            borderRadius: 24,
+            padding: 24,
+            alignItems: 'center',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 12 },
+            shadowOpacity: 0.4,
+            shadowRadius: 24,
+            elevation: 12,
+          }}>
+          <View
+            style={{
+              width: 68,
+              height: 68,
+              borderRadius: 34,
+              backgroundColor: color + '18',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: 16,
+              borderColor: color + '30',
+              borderWidth: 1,
+            }}>
+            <Ionicons name={icon} size={36} color={color} />
+          </View>
+
+          <Text
+            style={{
+              fontSize: 20,
+              fontWeight: '800',
+              color: c.text,
+              textAlign: 'center',
+              marginBottom: 8,
+            }}>
+            {title}
+          </Text>
+
+          <Text
+            style={{
+              fontSize: 14,
+              lineHeight: 20,
+              color: c.muted,
+              textAlign: 'center',
+              marginBottom: 24,
+            }}>
+            {message}
+          </Text>
+
+          <View style={{ width: '100%' }}>
+            <Button label={buttonLabel} onPress={onClose} />
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}

@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, Pressable, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as SecureStore from 'expo-secure-store';
 import { useAuth } from '../auth';
 import { useTheme } from '../theme';
-import { Button, Card, ErrorText, Input, Screen, T } from '../ui';
+import { Button, Card, ConfirmModal, ErrorText, Input, Screen, StatusModal, T } from '../ui';
 
 export interface RuleSection {
   id: string;
@@ -84,6 +84,33 @@ export default function SavingsRulesScreen() {
   const [ruleText, setRuleText] = useState('');
   const [err, setErr] = useState<string | null>(null);
 
+  // Modern Confirmation & Status Modal States
+  const [confirmConfig, setConfirmConfig] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    icon?: keyof typeof Ionicons.glyphMap;
+    confirmLabel?: string;
+    isDestructive?: boolean;
+    onConfirm: () => void;
+  }>({
+    visible: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
+
+  const [statusConfig, setStatusConfig] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    type?: 'success' | 'error' | 'info';
+  }>({
+    visible: false,
+    title: '',
+    message: '',
+  });
+
   // Load saved rules from persistent storage
   useEffect(() => {
     (async () => {
@@ -133,7 +160,12 @@ export default function SavingsRulesScreen() {
 
   const handleSaveRule = async () => {
     if (!isVaultOwner) {
-      Alert.alert('Permission Denied', 'Only the vault admin can add or edit savings rules.');
+      setStatusConfig({
+        visible: true,
+        title: 'Permission Denied',
+        message: 'Only the vault admin can add or edit savings rules.',
+        type: 'error',
+      });
       return;
     }
 
@@ -153,7 +185,6 @@ export default function SavingsRulesScreen() {
       .filter((line) => line.length > 0);
 
     if (editingRuleId) {
-      // Update existing rule
       const updated = rules.map((r) => {
         if (r.id !== editingRuleId) return r;
         return {
@@ -166,9 +197,13 @@ export default function SavingsRulesScreen() {
         };
       });
       await saveRulesToStorage(updated);
-      Alert.alert('Rule Updated', `"${title.trim()}" has been updated.`);
+      setStatusConfig({
+        visible: true,
+        title: 'Rule Updated',
+        message: `"${title.trim()}" has been updated successfully.`,
+        type: 'success',
+      });
     } else {
-      // Add new rule
       const newRule: RuleSection = {
         id: `rule_${Date.now()}`,
         title: title.trim(),
@@ -180,73 +215,78 @@ export default function SavingsRulesScreen() {
       };
       const updated = [...rules, newRule];
       await saveRulesToStorage(updated);
-      Alert.alert('Rule Added', `"${newRule.title}" has been added to applied rules.`);
+      setStatusConfig({
+        visible: true,
+        title: 'Rule Added',
+        message: `"${newRule.title}" has been saved to group rules.`,
+        type: 'success',
+      });
     }
 
     cancelForm();
   };
 
   const confirmDeleteRule = (ruleId: string, ruleTitle: string) => {
-    if (!isVaultOwner) {
-      Alert.alert('Permission Denied', 'Only the vault admin can delete savings rules.');
-      return;
-    }
+    if (!isVaultOwner) return;
 
-    Alert.alert(
-      'Delete Rule',
-      `Are you sure you want to delete "${ruleTitle}"?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            const updated = rules.filter((r) => r.id !== ruleId);
-            await saveRulesToStorage(updated);
-          },
-        },
-      ]
-    );
+    setConfirmConfig({
+      visible: true,
+      title: 'Delete Rule?',
+      message: `Are you sure you want to delete "${ruleTitle}"? This rule will be permanently removed.`,
+      icon: 'trash-outline',
+      confirmLabel: 'Delete Rule',
+      isDestructive: true,
+      onConfirm: async () => {
+        setConfirmConfig((prev) => ({ ...prev, visible: false }));
+        const updated = rules.filter((r) => r.id !== ruleId);
+        await saveRulesToStorage(updated);
+      },
+    });
   };
 
   const confirmDeleteItem = (ruleId: string, itemIndex: number) => {
     if (!isVaultOwner) return;
 
-    Alert.alert('Delete Rule Item', 'Remove this bullet point?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          const updated = rules.map((r) => {
-            if (r.id !== ruleId) return r;
-            const newItems = r.items.filter((_, idx) => idx !== itemIndex);
-            return { ...r, items: newItems };
-          }).filter((r) => r.items.length > 0);
-          await saveRulesToStorage(updated);
-        },
+    setConfirmConfig({
+      visible: true,
+      title: 'Remove Rule Point?',
+      message: 'Are you sure you want to remove this bullet point from the rule?',
+      icon: 'remove-circle-outline',
+      confirmLabel: 'Remove Point',
+      isDestructive: true,
+      onConfirm: async () => {
+        setConfirmConfig((prev) => ({ ...prev, visible: false }));
+        const updated = rules.map((r) => {
+          if (r.id !== ruleId) return r;
+          const newItems = r.items.filter((_, idx) => idx !== itemIndex);
+          return { ...r, items: newItems };
+        }).filter((r) => r.items.length > 0);
+        await saveRulesToStorage(updated);
       },
-    ]);
+    });
   };
 
   const resetToDefaults = () => {
     if (!isVaultOwner) return;
 
-    Alert.alert(
-      'Reset All Rules',
-      'Restore the default group rules? Any custom rules will be cleared.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Reset',
-          style: 'destructive',
-          onPress: async () => {
-            await saveRulesToStorage(DEFAULT_RULES);
-            Alert.alert('Reset Complete', 'Default savings rules restored.');
-          },
-        },
-      ]
-    );
+    setConfirmConfig({
+      visible: true,
+      title: 'Reset All Rules?',
+      message: 'Restore the default group rules? Any custom rules you added will be cleared.',
+      icon: 'refresh-circle-outline',
+      confirmLabel: 'Reset to Defaults',
+      isDestructive: true,
+      onConfirm: async () => {
+        setConfirmConfig((prev) => ({ ...prev, visible: false }));
+        await saveRulesToStorage(DEFAULT_RULES);
+        setStatusConfig({
+          visible: true,
+          title: 'Reset Complete',
+          message: 'Default savings rules have been restored.',
+          type: 'success',
+        });
+      },
+    });
   };
 
   const getCategoryColor = (cat?: string) => {
@@ -452,6 +492,27 @@ export default function SavingsRulesScreen() {
           </T>
         </Pressable>
       )}
+
+      {/* Custom Designed Confirmation Modal */}
+      <ConfirmModal
+        visible={confirmConfig.visible}
+        title={confirmConfig.title}
+        message={confirmConfig.message}
+        icon={confirmConfig.icon}
+        confirmLabel={confirmConfig.confirmLabel}
+        isDestructive={confirmConfig.isDestructive}
+        onConfirm={confirmConfig.onConfirm}
+        onCancel={() => setConfirmConfig((prev) => ({ ...prev, visible: false }))}
+      />
+
+      {/* Custom Designed Status/Alert Modal */}
+      <StatusModal
+        visible={statusConfig.visible}
+        title={statusConfig.title}
+        message={statusConfig.message}
+        type={statusConfig.type}
+        onClose={() => setStatusConfig((prev) => ({ ...prev, visible: false }))}
+      />
     </Screen>
   );
 }
