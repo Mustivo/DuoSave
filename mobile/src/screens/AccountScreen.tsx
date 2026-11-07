@@ -200,7 +200,31 @@ export default function AccountScreen() {
           </View>
           <Input label={`Savings goal (${v.currency})`} value={goal} onChangeText={setGoal} keyboardType="decimal-pad" editable={isVaultOwner} />
           <Input label="Monthly target for both of you" value={target} onChangeText={setTarget} keyboardType="decimal-pad" editable={isVaultOwner} />
-          <Input label="Reminder day of the month (1 to 28)" value={day} onChangeText={setDay} keyboardType="number-pad" maxLength={2} editable={isVaultOwner} />
+          
+          <View style={{ gap: 6 }}>
+            <T size={12} muted weight="600">Reminder day of the month (1 to 28)</T>
+            <T size={11} muted>Both partners will see the savings alert notification on their dashboard on this day.</T>
+            {isVaultOwner && (
+              <View style={{ flexDirection: 'row', gap: 6, marginVertical: 4 }}>
+                {[1, 5, 15, 20, 25, 28].map((d) => (
+                  <Pressable
+                    key={d}
+                    onPress={() => setDay(String(d))}
+                    style={{
+                      flex: 1,
+                      paddingVertical: 7,
+                      borderRadius: 8,
+                      alignItems: 'center',
+                      backgroundColor: day === String(d) ? c.accent : c.cardAlt,
+                    }}>
+                    <T size={11} weight="700" color={day === String(d) ? c.onAccent : c.text}>{d}</T>
+                  </Pressable>
+                ))}
+              </View>
+            )}
+            <Input value={day} onChangeText={setDay} keyboardType="number-pad" maxLength={2} editable={isVaultOwner} placeholder="e.g. 28" />
+          </View>
+
           <ErrorText msg={err} />
           {isVaultOwner ? (
             <Button label="Save plan" onPress={saveSettings} />

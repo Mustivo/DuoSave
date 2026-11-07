@@ -69,6 +69,10 @@ export function Screen({ title, children, onRefresh, refreshing }: {
           <Text style={{ color: c.muted, fontSize: 12, marginTop: 2 }}>{linked}</Text>
         </View>
         {children}
+        <View style={{ alignItems: 'center', marginTop: 24, marginBottom: 8, gap: 4 }}>
+          <Text style={{ color: c.muted, fontSize: 11, fontWeight: '600' }}>© 2026 DuoSave • Built for Two</Text>
+          <Text style={{ color: c.muted, fontSize: 10, opacity: 0.7 }}>Save smarter, together • All rights reserved</Text>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
