@@ -77,6 +77,21 @@ vault.post('/vault/partner', requireVault, h(async (req, res) => {
   res.json({ ok: true, partner: { id: partnerUser.id, name: b.name, email: b.email } });
 }));
 
+vault.delete('/vault/partner', requireVault, h(async (req, res) => {
+  const { data: v } = await admin.from('vaults').select('*').eq('id', req.vaultId!).single();
+  if (v?.created_by !== req.userId) {
+    throw new HttpError(403, 'Only the vault owner can unlink the partner');
+  }
+  const { data: members } = await admin.from('vault_members').select('user_id').eq('vault_id', req.vaultId!);
+  for (const m of members ?? []) {
+    if (m.user_id !== req.userId) {
+      await admin.from('vault_members').delete().eq('vault_id', req.vaultId!).eq('user_id', m.user_id);
+    }
+  }
+  await logAndAlertPartner(req.vaultId!, req.userId, 'join', 'Partner was unlinked from the vault');
+  res.json({ ok: true });
+}));
+
 vault.put('/me/push-token', h(async (req, res) => {
   const { token } = z.object({ token: z.string() }).parse(req.body);
   await admin.from('profiles').update({ push_token: token }).eq('id', req.userId);

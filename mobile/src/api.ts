@@ -114,4 +114,8 @@ export const api = {
     clearApiCache();
     return request<T>('PUT', p, b);
   },
+  delete: async <T,>(p: string, b?: unknown): Promise<T> => {
+    clearApiCache();
+    return request<T>('DELETE', p, b);
+  },
 };

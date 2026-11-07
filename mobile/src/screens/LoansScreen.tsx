@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Alert, View } from 'react-native';
+import { Alert, Pressable, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { api } from '../api';
 import { useAuth } from '../auth';
 import { useTheme } from '../theme';
@@ -42,6 +43,25 @@ export default function LoansScreen() {
     catch (e: any) { setErr(e.message); }
   };
 
+  const confirmDeleteLoan = (id: string, loanAmount: number | string) => {
+    Alert.alert('Delete Loan', `Are you sure you want to remove this loan of ${money(Number(loanAmount), cur)}?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          setErr(null);
+          try {
+            await api.delete(`/loans/${id}`);
+            await reload();
+          } catch (e: any) {
+            setErr(e.message);
+          }
+        },
+      },
+    ]);
+  };
+
   return (
     <Screen title="Loans" onRefresh={reload} refreshing={loading}>
       <ErrorText msg={error} />
@@ -64,11 +84,22 @@ export default function LoansScreen() {
       {data?.loans.map((l) => {
         const owed = Number(l.amount) - Number(l.repaid);
         const mine = l.borrower_id === me?.profile.id;
+        const canDelete = (mine || me?.profile.id === data?.summary.vault.created_by) && Number(l.repaid) === 0;
         return (
           <Card key={l.id}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
               <T weight="700">{mine ? 'You' : nameOf(l.borrower_id)}{l.purpose ? `: ${l.purpose}` : ''}</T>
-              <T weight="700" color={l.status === 'repaid' ? c.accent : c.warn}>{l.status === 'repaid' ? 'Repaid' : 'Active'}</T>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <T weight="700" color={l.status === 'repaid' ? c.accent : c.warn}>{l.status === 'repaid' ? 'Repaid' : 'Active'}</T>
+                {canDelete && (
+                  <Pressable
+                    onPress={() => confirmDeleteLoan(l.id, l.amount)}
+                    hitSlop={8}
+                    style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}>
+                    <Ionicons name="trash-outline" size={18} color={c.danger} />
+                  </Pressable>
+                )}
+              </View>
             </View>
             <T size={13} muted>{money(Number(l.repaid), cur)} repaid of {money(Number(l.amount), cur)}</T>
             {l.status === 'active' && mine && (

@@ -83,3 +83,31 @@ money.post('/notifications/read', h(async (req, res) => {
   await admin.from('notifications').update({ read: true }).eq('user_id', req.userId).eq('read', false);
   res.json({ ok: true });
 }));
+
+/* ---------- Deletions ---------- */
+money.delete('/loans/:id', h(async (req, res) => {
+  const { data: l } = await admin.from('loans').select('*').eq('id', req.params.id).eq('vault_id', req.vaultId!).maybeSingle();
+  if (!l) throw new HttpError(404, 'Loan not found');
+  if (l.borrower_id !== req.userId) {
+    const { data: v } = await admin.from('vaults').select('created_by').eq('id', req.vaultId!).single();
+    if (v?.created_by !== req.userId) throw new HttpError(403, 'Only borrower or vault admin can delete this loan');
+  }
+  if (Number(l.repaid) > 0) {
+    throw new HttpError(400, 'Cannot delete a loan that has partial repayments');
+  }
+  await admin.from('loans').delete().eq('id', req.params.id);
+  await logAndAlertPartner(req.vaultId!, req.userId, 'loan', `Loan of ${l.amount} was deleted`);
+  res.json({ ok: true });
+}));
+
+money.delete('/savings/:id', h(async (req, res) => {
+  const { data: c } = await admin.from('contributions').select('*').eq('id', req.params.id).eq('vault_id', req.vaultId!).maybeSingle();
+  if (!c) throw new HttpError(404, 'Savings record not found');
+  if (c.user_id !== req.userId) {
+    const { data: v } = await admin.from('vaults').select('created_by').eq('id', req.vaultId!).single();
+    if (v?.created_by !== req.userId) throw new HttpError(403, 'Only creator or vault admin can delete this deposit');
+  }
+  await admin.from('contributions').delete().eq('id', req.params.id);
+  await logAndAlertPartner(req.vaultId!, req.userId, 'deposit', `Savings deposit of ${c.amount} was deleted`);
+  res.json({ ok: true });
+}));

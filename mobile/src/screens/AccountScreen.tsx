@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Alert, Pressable, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { api } from '../api';
 import { useAuth } from '../auth';
 import { Mode, useTheme } from '../theme';
@@ -87,6 +88,34 @@ export default function AccountScreen() {
     }
   };
 
+  const handleUnlinkPartner = () => {
+    if (!me?.partner) return;
+    Alert.alert(
+      'Unlink Partner',
+      `Are you sure you want to remove ${me.partner.name} from this vault? They will lose access to shared savings.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Unlink',
+          style: 'destructive',
+          onPress: async () => {
+            setPBusy(true);
+            setPErr(null);
+            try {
+              await api.delete('/vault/partner');
+              await refreshMe();
+              Alert.alert('Partner Removed', 'Partner has been unlinked from this vault.');
+            } catch (e: any) {
+              setPErr(e.message);
+            } finally {
+              setPBusy(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <Screen title="Account">
       <Card>
@@ -116,8 +145,29 @@ export default function AccountScreen() {
             Create an account for your partner. They will receive a code to choose their own password.
           </T>
           {me?.partner && (
-            <View style={{ backgroundColor: c.cardAlt, padding: 10, borderRadius: 10 }}>
-              <T size={13} weight="600">Currently Linked Partner: <T color={c.accent}>{me.partner.name}</T></T>
+            <View style={{ backgroundColor: c.cardAlt, padding: 12, borderRadius: 10, gap: 10 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <View style={{ flex: 1 }}>
+                  <T size={13} weight="600">Currently Linked Partner: <T color={c.accent}>{me.partner.name}</T></T>
+                  {me.partner.email ? <T size={12} muted>{me.partner.email}</T> : null}
+                </View>
+                <Pressable
+                  onPress={handleUnlinkPartner}
+                  disabled={pBusy}
+                  style={({ pressed }) => ({
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 4,
+                    backgroundColor: c.danger + '20',
+                    paddingHorizontal: 10,
+                    paddingVertical: 6,
+                    borderRadius: 8,
+                    opacity: pressed || pBusy ? 0.6 : 1,
+                  })}>
+                  <Ionicons name="person-remove-outline" size={16} color={c.danger} />
+                  <T size={12} weight="700" color={c.danger}>Unlink</T>
+                </Pressable>
+              </View>
             </View>
           )}
           <Input label="Partner Name" placeholder="e.g. Partner Name" value={pName} onChangeText={setPName} />
