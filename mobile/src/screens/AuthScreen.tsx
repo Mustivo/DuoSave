@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, View, Image, Pressable, Alert } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, View, Image, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,22 +7,29 @@ import * as SecureStore from 'expo-secure-store';
 import { useAuth } from '../auth';
 import { useTheme } from '../theme';
 import { api } from '../api';
-import { Button, Card, CopyrightFooter, ErrorText, Input, T } from '../ui';
+import { Button, CopyrightFooter, ErrorText, Input, StatusModal, T } from '../ui';
 
-type AuthMode = 'login' | 'forgot-choice' | 'enter-code' | 'request-code';
+type AuthMode = 'login' | 'forgot-choice' | 'verify-code' | 'set-password' | 'request-code';
 
 export default function AuthScreen() {
   const { c, isDark } = useTheme();
   const { signIn } = useAuth();
   const [mode, setMode] = useState<AuthMode>('login');
   const [email, setEmail] = useState('');
+  const [otp, setOtp] = useState('');
   const [pw, setPw] = useState('');
   const [confirmPw, setConfirmPw] = useState('');
-  const [otp, setOtp] = useState('');
+  const [verifiedUserId, setVerifiedUserId] = useState<string | null>(null);
   const [showPw, setShowPw] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [statusConfig, setStatusConfig] = useState<{
+    visible: boolean;
+    type: 'success' | 'error' | 'info';
+    title: string;
+    message: string;
+  }>({ visible: false, type: 'info', title: '', message: '' });
 
   useEffect(() => {
     SecureStore.getItemAsync('duo_last_email').then((saved) => {
@@ -38,8 +45,8 @@ export default function AuthScreen() {
     setBusy(true); setErr(null); setMsg(null);
     try {
       await api.post('/auth/forgot-password', { email: email.trim().toLowerCase() });
-      setMode('enter-code');
-      setMsg(`Verification code sent to ${email.trim()}. Enter it below with your new password.`);
+      setMode('verify-code');
+      setMsg(`Verification code sent to ${email.trim()}. Enter it below to confirm.`);
     } catch (e: any) {
       setErr(e.message);
     } finally {
@@ -47,15 +54,34 @@ export default function AuthScreen() {
     }
   };
 
-  const submitResetOtp = async () => {
-    if (!email.trim() || !email.includes('@')) { setErr('Please enter your email'); return; }
+  const submitVerifyCode = async () => {
+    if (!email.trim() || !email.includes('@')) { setErr('Please enter your email address'); return; }
     if (!otp.trim()) { setErr('Please enter the verification code'); return; }
+
+    setBusy(true); setErr(null); setMsg(null);
+    try {
+      const res = await api.post<{ ok: boolean; userId: string }>('/auth/verify-code', {
+        email: email.trim().toLowerCase(),
+        otp: otp.trim(),
+      });
+      setVerifiedUserId(res.userId);
+      setMode('set-password');
+      setMsg('Code confirmed! Please enter your new password.');
+    } catch (e: any) {
+      setErr(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const submitSetPassword = async () => {
     if (!pw || pw.length < 6) { setErr('New password must be at least 6 characters'); return; }
     if (pw !== confirmPw) { setErr('Passwords do not match'); return; }
 
     setBusy(true); setErr(null); setMsg(null);
     try {
-      await api.post('/auth/reset-password', {
+      await api.post('/auth/set-password', {
+        userId: verifiedUserId ?? undefined,
         email: email.trim().toLowerCase(),
         otp: otp.trim(),
         newPassword: pw,
@@ -64,8 +90,14 @@ export default function AuthScreen() {
       setPw('');
       setConfirmPw('');
       setOtp('');
-      setMsg('Password updated successfully! You can now log in.');
-      Alert.alert('Password Updated', 'Your new password is set. Please sign in.');
+      setVerifiedUserId(null);
+      setMsg('Password updated successfully! You can now sign in.');
+      setStatusConfig({
+        visible: true,
+        type: 'success',
+        title: 'Password Updated',
+        message: 'Your new password has been set. You can now sign in.',
+      });
     } catch (e: any) {
       setErr(e.message);
     } finally {
@@ -107,7 +139,8 @@ export default function AuthScreen() {
             <T muted style={{ textAlign: 'center', maxWidth: 300 }}>
               {mode === 'login' && 'Sign in to access your shared savings vault.'}
               {mode === 'forgot-choice' && 'Choose an option to verify your code or reset your password.'}
-              {mode === 'enter-code' && 'Enter the verification code from your email and set your password.'}
+              {mode === 'verify-code' && 'Step 1: Enter your email and verification code.'}
+              {mode === 'set-password' && 'Step 2: Create your new password.'}
               {mode === 'request-code' && 'Enter your email to receive a password reset code.'}
             </T>
           </View>
@@ -155,12 +188,12 @@ export default function AuthScreen() {
             </>
           )}
 
-          {/* MODE 2: FORGOT CHOICES (TWO DISTINCT ACTIONS) */}
+          {/* MODE 2: FORGOT CHOICES (TWO DISTINCT ACTIONS, NO ARROWS) */}
           {mode === 'forgot-choice' && (
             <View style={{ gap: 12 }}>
               {/* Option 1: Use Verification Code */}
               <Pressable
-                onPress={() => { setMode('enter-code'); setErr(null); setMsg(null); }}
+                onPress={() => { setMode('verify-code'); setErr(null); setMsg(null); }}
                 style={({ pressed }) => ({
                   backgroundColor: c.card,
                   borderColor: c.accent,
@@ -179,9 +212,12 @@ export default function AuthScreen() {
                     <T size={12} muted>For newly linked partners with an invite code from the admin, or if you already have an OTP.</T>
                   </View>
                 </View>
-                <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 4, marginTop: 4 }}>
-                  <T size={13} weight="700" color={c.accent}>Enter Code & Set Password</T>
-                  <Ionicons name="arrow-forward" size={16} color={c.accent} />
+                <View style={{ marginTop: 6 }}>
+                  <Button
+                    label="Enter Verification Code"
+                    variant="primary"
+                    onPress={() => { setMode('verify-code'); setErr(null); setMsg(null); }}
+                  />
                 </View>
               </Pressable>
 
@@ -206,22 +242,25 @@ export default function AuthScreen() {
                     <T size={12} muted>For existing linked members who forgot their password and need a new code sent.</T>
                   </View>
                 </View>
-                <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 4, marginTop: 4 }}>
-                  <T size={13} weight="700" color={c.blue}>Request New Code</T>
-                  <Ionicons name="arrow-forward" size={16} color={c.blue} />
+                <View style={{ marginTop: 6 }}>
+                  <Button
+                    label="Send Reset Code to Email"
+                    variant="ghost"
+                    onPress={() => { setMode('request-code'); setErr(null); setMsg(null); }}
+                  />
                 </View>
               </Pressable>
 
               <Button
-                label="← Back to Sign In"
+                label="Back to Sign In"
                 variant="ghost"
                 onPress={() => { setMode('login'); setErr(null); setMsg(null); }}
               />
             </View>
           )}
 
-          {/* MODE 3: ENTER VERIFICATION CODE & SET NEW PASSWORD */}
-          {mode === 'enter-code' && (
+          {/* MODE 3: STEP 1 - ENTER & VERIFY CODE ONLY */}
+          {mode === 'verify-code' && (
             <>
               <Input
                 label="Email"
@@ -240,6 +279,42 @@ export default function AuthScreen() {
                 keyboardType="number-pad"
                 maxLength={10}
               />
+
+              {msg && (
+                <View style={{ backgroundColor: c.accent + '15', padding: 12, borderRadius: 10, borderColor: c.accent + '33', borderWidth: 1 }}>
+                  <T size={13} color={c.accent} weight="600">{msg}</T>
+                </View>
+              )}
+              <ErrorText msg={err} />
+
+              <Button label="Verify Code" onPress={submitVerifyCode} loading={busy} />
+
+              <Button
+                label="Need a code? Send reset code"
+                variant="ghost"
+                onPress={() => { setMode('request-code'); setErr(null); setMsg(null); }}
+              />
+
+              <Button
+                label="Back to Options"
+                variant="ghost"
+                onPress={() => { setMode('forgot-choice'); setErr(null); setMsg(null); }}
+              />
+            </>
+          )}
+
+          {/* MODE 4: STEP 2 - ENTER NEW PASSWORD AFTER CODE IS CONFIRMED */}
+          {mode === 'set-password' && (
+            <>
+              <View style={{ backgroundColor: c.accent + '15', padding: 12, borderRadius: 10, borderColor: c.accent + '33', borderWidth: 1, gap: 4 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Ionicons name="checkmark-circle" size={18} color={c.accent} />
+                  <T size={13} weight="700" color={c.accent}>Verification Confirmed</T>
+                </View>
+                <T size={12}>
+                  Code successfully verified for {email}. Please choose your new password.
+                </T>
+              </View>
 
               <Input
                 label="New Password"
@@ -262,30 +337,19 @@ export default function AuthScreen() {
                 secureTextEntry={!showPw}
               />
 
-              {msg && (
-                <View style={{ backgroundColor: c.accent + '15', padding: 12, borderRadius: 10, borderColor: c.accent + '33', borderWidth: 1 }}>
-                  <T size={13} color={c.accent} weight="600">{msg}</T>
-                </View>
-              )}
               <ErrorText msg={err} />
 
-              <Button label="Confirm & Set Password" onPress={submitResetOtp} loading={busy} />
+              <Button label="Save New Password" onPress={submitSetPassword} loading={busy} />
 
               <Button
-                label="Need a code? Send reset code"
+                label="Back to Sign In"
                 variant="ghost"
-                onPress={() => { setMode('request-code'); setErr(null); setMsg(null); }}
-              />
-
-              <Button
-                label="← Back to choices"
-                variant="ghost"
-                onPress={() => { setMode('forgot-choice'); setErr(null); setMsg(null); }}
+                onPress={() => { setMode('login'); setErr(null); setMsg(null); }}
               />
             </>
           )}
 
-          {/* MODE 4: REQUEST NEW RESET CODE */}
+          {/* MODE 5: REQUEST NEW RESET CODE */}
           {mode === 'request-code' && (
             <>
               <Input
@@ -309,11 +373,11 @@ export default function AuthScreen() {
               <Button
                 label="Already have a code? Enter it here"
                 variant="ghost"
-                onPress={() => { setMode('enter-code'); setErr(null); setMsg(null); }}
+                onPress={() => { setMode('verify-code'); setErr(null); setMsg(null); }}
               />
 
               <Button
-                label="← Back to choices"
+                label="Back to Options"
                 variant="ghost"
                 onPress={() => { setMode('forgot-choice'); setErr(null); setMsg(null); }}
               />
@@ -323,6 +387,14 @@ export default function AuthScreen() {
           <CopyrightFooter />
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <StatusModal
+        visible={statusConfig.visible}
+        type={statusConfig.type}
+        title={statusConfig.title}
+        message={statusConfig.message}
+        onClose={() => setStatusConfig(prev => ({ ...prev, visible: false }))}
+      />
     </SafeAreaView>
   );
 }

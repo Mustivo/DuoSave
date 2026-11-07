@@ -72,6 +72,63 @@ auth.post('/forgot-password', h(async (req, res) => {
   res.json({ ok: true, message: 'Verification code sent to your email.' });
 }));
 
+auth.post('/verify-code', h(async (req, res) => {
+  const b = z.object({
+    email: z.string().email(),
+    otp: z.string().min(4).max(12),
+  }).parse(req.body);
+
+  const targetEmail = b.email.trim().toLowerCase();
+
+  const { data: vData, error: vError } = await anon.auth.verifyOtp({
+    email: targetEmail,
+    token: b.otp.trim(),
+    type: 'recovery',
+  });
+
+  if (vError || !vData.user) {
+    throw new HttpError(400, 'Invalid or expired verification code');
+  }
+
+  res.json({ ok: true, userId: vData.user.id, email: targetEmail, message: 'Code verified successfully' });
+}));
+
+auth.post('/set-password', h(async (req, res) => {
+  const b = z.object({
+    userId: z.string().uuid().optional(),
+    email: z.string().email().optional(),
+    otp: z.string().optional(),
+    newPassword: z.string().min(6),
+  }).parse(req.body);
+
+  let targetUserId = b.userId;
+
+  if (!targetUserId && b.email && b.otp) {
+    const targetEmail = b.email.trim().toLowerCase();
+    const { data: vData, error: vError } = await anon.auth.verifyOtp({
+      email: targetEmail,
+      token: b.otp.trim(),
+      type: 'recovery',
+    });
+    if (vError || !vData.user) {
+      throw new HttpError(400, 'Invalid or expired verification code');
+    }
+    targetUserId = vData.user.id;
+  }
+
+  if (!targetUserId) {
+    throw new HttpError(400, 'Missing user verification information');
+  }
+
+  const { error: uErr } = await admin.auth.admin.updateUserById(targetUserId, {
+    password: b.newPassword,
+  });
+
+  if (uErr) throw new HttpError(400, uErr.message);
+
+  res.json({ ok: true, message: 'Your password has been updated. You can now sign in.' });
+}));
+
 auth.post('/reset-password', h(async (req, res) => {
   const b = z.object({
     email: z.string().email(),
