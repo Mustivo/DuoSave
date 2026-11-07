@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '../api';
 import { useTheme } from '../theme';
 import { ActivityItem } from '../types';
-import { Card, ConfirmModal, ErrorText, Screen, StatusModal, T, money, timeAgo, useLoad } from '../ui';
+import { Card, ConfirmModal, ErrorText, Screen, StatusModal, SwipeableItem, T, money, timeAgo, useLoad } from '../ui';
 
 const icons: Record<string, keyof typeof Ionicons.glyphMap> = {
   deposit: 'arrow-down-circle',
@@ -22,6 +22,7 @@ export default function ActivityScreen() {
     return items;
   });
 
+  const [items, setItems] = useState<ActivityItem[]>([]);
   const [confirmVisible, setConfirmVisible] = useState(false);
   const [statusConfig, setStatusConfig] = useState<{
     visible: boolean;
@@ -33,6 +34,10 @@ export default function ActivityScreen() {
     title: '',
     message: '',
   });
+
+  useEffect(() => {
+    if (data) setItems(data);
+  }, [data]);
 
   const handleClearNotifications = async () => {
     setConfirmVisible(false);
@@ -55,6 +60,17 @@ export default function ActivityScreen() {
     }
   };
 
+  const handleDeleteItem = async (id: string) => {
+    // Optimistic removal
+    setItems((prev) => prev.filter((item) => item.id !== id));
+    try {
+      await api.delete(`/activity/${id}`).catch(() => {});
+      await api.delete(`/notifications/${id}`).catch(() => {});
+    } catch (e: any) {
+      console.warn('Could not delete item:', e?.message);
+    }
+  };
+
   const color = (t: string) => (t === 'loan' ? c.warn : t === 'deposit' || t === 'repayment' ? c.accent : c.blue);
 
   return (
@@ -62,7 +78,7 @@ export default function ActivityScreen() {
       <ErrorText msg={error} />
 
       {/* Clear Notifications Header Action */}
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
         <T weight="700" size={15}>Activity Feed</T>
         <Pressable
           onPress={() => setConfirmVisible(true)}
@@ -84,17 +100,40 @@ export default function ActivityScreen() {
         </Pressable>
       </View>
 
-      {data?.length === 0 && <T muted>Nothing yet. Savings and loans from your vault show up here.</T>}
+      {/* Swipe Right to Delete Hint */}
+      {items.length > 0 && (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+          <Ionicons name="arrow-forward" size={14} color={c.muted} />
+          <T size={12} muted>Swipe right on any alert to delete it</T>
+        </View>
+      )}
 
-      {data?.map((a) => (
-        <Card key={a.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-          <Ionicons name={icons[a.type] ?? 'ellipse'} size={28} color={color(a.type)} />
-          <View style={{ flex: 1 }}>
-            <T weight="600">{a.message}</T>
-            <T size={12} muted>{timeAgo(a.created_at)}</T>
-          </View>
-          {a.amount ? <T weight="700" color={color(a.type)}>{a.type === 'loan' ? '-' : '+'}{money(Number(a.amount))}</T> : null}
-        </Card>
+      {items.length === 0 && !loading && (
+        <T muted style={{ marginTop: 12 }}>Nothing yet. Savings and loans from your vault show up here.</T>
+      )}
+
+      {items.map((a) => (
+        <SwipeableItem key={a.id} onDelete={() => handleDeleteItem(a.id)}>
+          <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <Ionicons name={icons[a.type] ?? 'ellipse'} size={28} color={color(a.type)} />
+            <View style={{ flex: 1 }}>
+              <T weight="600">{a.message}</T>
+              <T size={12} muted>{timeAgo(a.created_at)}</T>
+            </View>
+            {a.amount ? <T weight="700" color={color(a.type)}>{a.type === 'loan' ? '-' : '+'}{money(Number(a.amount))}</T> : null}
+            <Pressable
+              onPress={() => handleDeleteItem(a.id)}
+              hitSlop={8}
+              style={({ pressed }) => ({
+                padding: 6,
+                borderRadius: 8,
+                backgroundColor: c.danger + '14',
+                opacity: pressed ? 0.6 : 1,
+              })}>
+              <Ionicons name="trash-outline" size={16} color={c.danger} />
+            </Pressable>
+          </Card>
+        </SwipeableItem>
       ))}
 
       {/* Confirmation Modal */}

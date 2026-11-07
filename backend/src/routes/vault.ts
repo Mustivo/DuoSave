@@ -102,19 +102,32 @@ vault.post('/vault/partner', requireVault, h(async (req, res) => {
 
 vault.delete('/vault/partner', requireVault, h(async (req, res) => {
   if (!isMasterAdmin(req.userEmail)) {
-    throw new HttpError(403, `Only master administrator (${MASTER_ADMIN_EMAIL}) can unlink partners`);
+    throw new HttpError(403, `Only master administrator (${MASTER_ADMIN_EMAIL}) can delete or unlink partners`);
   }
 
   const targetUserId = (req.query.userId as string) || (req.body?.userId as string);
+  const permanent = req.query.permanent === 'true' || req.body?.permanent === true;
+
   if (targetUserId) {
     if (targetUserId === req.userId) {
-      throw new HttpError(400, 'Cannot unlink yourself as admin. Delete or transfer the vault instead.');
+      throw new HttpError(400, 'Cannot remove yourself as admin. Delete or transfer the vault instead.');
     }
     const { data: pProfile } = await admin.from('profiles').select('name').eq('id', targetUserId).maybeSingle();
     const partnerName = pProfile?.name || 'Partner';
     await admin.from('vault_members').delete().eq('vault_id', req.vaultId!).eq('user_id', targetUserId);
-    await logAndAlertPartner(req.vaultId!, req.userId, 'join', `${partnerName} was unlinked from the vault`);
-    return res.json({ ok: true, message: `${partnerName} was unlinked` });
+    
+    if (permanent) {
+      await admin.from('notifications').delete().eq('user_id', targetUserId);
+      await admin.from('profiles').delete().eq('id', targetUserId);
+      try {
+        await admin.auth.admin.deleteUser(targetUserId);
+      } catch (e: any) {
+        console.warn('deleteUser error:', e?.message);
+      }
+    }
+
+    await logAndAlertPartner(req.vaultId!, req.userId, 'join', `${partnerName} was removed from the vault`);
+    return res.json({ ok: true, message: `${partnerName} was removed from the vault` });
   }
 
   // Fallback: unlink all other members
@@ -130,17 +143,49 @@ vault.delete('/vault/partner', requireVault, h(async (req, res) => {
 
 vault.delete('/vault/partner/:userId', requireVault, h(async (req, res) => {
   if (!isMasterAdmin(req.userEmail)) {
-    throw new HttpError(403, `Only master administrator (${MASTER_ADMIN_EMAIL}) can unlink partners`);
+    throw new HttpError(403, `Only master administrator (${MASTER_ADMIN_EMAIL}) can delete partners`);
   }
   const targetUserId = req.params.userId;
+  const permanent = req.query.permanent === 'true';
+
   if (targetUserId === req.userId) {
-    throw new HttpError(400, 'Cannot unlink yourself as admin. Delete or transfer the vault instead.');
+    throw new HttpError(400, 'Cannot remove yourself as admin. Delete or transfer the vault instead.');
   }
   const { data: pProfile } = await admin.from('profiles').select('name').eq('id', targetUserId).maybeSingle();
   const partnerName = pProfile?.name || 'Partner';
   await admin.from('vault_members').delete().eq('vault_id', req.vaultId!).eq('user_id', targetUserId);
-  await logAndAlertPartner(req.vaultId!, req.userId, 'join', `${partnerName} was unlinked from the vault`);
-  res.json({ ok: true, message: `${partnerName} was unlinked` });
+
+  if (permanent) {
+    await admin.from('notifications').delete().eq('user_id', targetUserId);
+    await admin.from('profiles').delete().eq('id', targetUserId);
+    try {
+      await admin.auth.admin.deleteUser(targetUserId);
+    } catch (e: any) {
+      console.warn('deleteUser error:', e?.message);
+    }
+  }
+
+  await logAndAlertPartner(req.vaultId!, req.userId, 'join', `${partnerName} was removed from the vault`);
+  res.json({ ok: true, message: `${partnerName} was removed from the vault` });
+}));
+
+vault.delete('/vault/admin/user/:userId', h(async (req, res) => {
+  if (!isMasterAdmin(req.userEmail)) {
+    throw new HttpError(403, `Only master administrator (${MASTER_ADMIN_EMAIL}) can permanently delete user accounts`);
+  }
+  const targetUserId = req.params.userId;
+  if (targetUserId === req.userId) {
+    throw new HttpError(400, 'Cannot delete yourself as master administrator.');
+  }
+  await admin.from('vault_members').delete().eq('user_id', targetUserId);
+  await admin.from('notifications').delete().eq('user_id', targetUserId);
+  await admin.from('profiles').delete().eq('id', targetUserId);
+  try {
+    await admin.auth.admin.deleteUser(targetUserId);
+  } catch (err: any) {
+    console.warn('deleteUser auth error:', err?.message);
+  }
+  res.json({ ok: true, message: 'User account permanently deleted' });
 }));
 
 vault.put('/me/push-token', h(async (req, res) => {

@@ -1,6 +1,6 @@
 import React, { useCallback, useRef, useState } from 'react';
 import {
-  ActivityIndicator, Modal, Pressable, RefreshControl, ScrollView, StyleProp, Text, TextStyle,
+  ActivityIndicator, Animated, Modal, PanResponder, Pressable, RefreshControl, ScrollView, StyleProp, Text, TextStyle,
   TextInput, TextInputProps, View, ViewStyle,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -99,11 +99,11 @@ export function Card({ children, style }: { children: React.ReactNode; style?: S
   );
 }
 
-export function T({ children, size = 14, weight = '400', muted, color, style }: {
-  children: React.ReactNode; size?: number; weight?: '400' | '600' | '700' | '800'; muted?: boolean; color?: string; style?: StyleProp<TextStyle>;
+export function T({ children, size = 14, weight = '400', muted, color, style, numberOfLines }: {
+  children: React.ReactNode; size?: number; weight?: '400' | '600' | '700' | '800'; muted?: boolean; color?: string; style?: StyleProp<TextStyle>; numberOfLines?: number;
 }) {
   const { c } = useTheme();
-  return <Text style={[{ fontSize: size, fontWeight: weight, color: color ?? (muted ? c.muted : c.text) }, style as any]}>{children}</Text>;
+  return <Text numberOfLines={numberOfLines} style={[{ fontSize: size, fontWeight: weight, color: color ?? (muted ? c.muted : c.text) }, style as any]}>{children}</Text>;
 }
 
 export function Button({ label, onPress, variant = 'primary', loading, disabled }: {
@@ -381,5 +381,96 @@ export function StatusModal({
         </Pressable>
       </Pressable>
     </Modal>
+  );
+}
+
+export interface SwipeableItemProps {
+  children: React.ReactNode;
+  onDelete: () => void | Promise<void>;
+  enabled?: boolean;
+}
+
+/**
+ * Message app-style swipe right to delete.
+ * Reveals a red trash background on the left as you swipe right.
+ * Releasing past threshold slides it off-screen and triggers onDelete.
+ */
+export function SwipeableItem({ children, onDelete, enabled = true }: SwipeableItemProps) {
+  const { c } = useTheme();
+  const pan = useRef(new Animated.Value(0)).current;
+  const [deleted, setDeleted] = useState(false);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, gs) => {
+        if (!enabled || deleted) return false;
+        return gs.dx > 12 && Math.abs(gs.dx) > Math.abs(gs.dy * 1.5);
+      },
+      onPanResponderMove: (_, gs) => {
+        if (gs.dx > 0) {
+          pan.setValue(gs.dx);
+        }
+      },
+      onPanResponderRelease: (_, gs) => {
+        if (gs.dx > 110) {
+          setDeleted(true);
+          Animated.timing(pan, {
+            toValue: 500,
+            duration: 200,
+            useNativeDriver: true,
+          }).start(() => {
+            onDelete();
+          });
+        } else {
+          Animated.spring(pan, {
+            toValue: 0,
+            useNativeDriver: true,
+            bounciness: 4,
+          }).start();
+        }
+      },
+      onPanResponderTerminate: () => {
+        Animated.spring(pan, {
+          toValue: 0,
+          useNativeDriver: true,
+          bounciness: 4,
+        }).start();
+      },
+    })
+  ).current;
+
+  if (deleted) return null;
+
+  return (
+    <View style={{ position: 'relative', overflow: 'hidden', borderRadius: 16 }}>
+      {/* Background action revealed on swipe right */}
+      <View
+        style={{
+          position: 'absolute',
+          left: 0,
+          top: 0,
+          bottom: 0,
+          width: '100%',
+          backgroundColor: c.danger,
+          borderRadius: 16,
+          flexDirection: 'row',
+          alignItems: 'center',
+          paddingLeft: 20,
+          gap: 8,
+        }}>
+        <Ionicons name="trash" size={24} color="#FFF" />
+        <Text style={{ color: '#FFF', fontWeight: '800', fontSize: 14 }}>Swipe right to delete</Text>
+      </View>
+
+      {/* Foreground swipeable card */}
+      <Animated.View
+        {...(enabled ? panResponder.panHandlers : {})}
+        style={{
+          transform: [{ translateX: pan }],
+        }}>
+        {children}
+      </Animated.View>
+    </View>
   );
 }

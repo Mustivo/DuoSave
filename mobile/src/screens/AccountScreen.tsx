@@ -193,29 +193,34 @@ export default function AccountScreen() {
     });
   };
 
-  const handleUnlinkPartner = (partnerToUnlink: { id: string; name: string }) => {
+  const handleDeletePartner = (partnerToDelete: { id: string; name: string }) => {
     setConfirmConfig({
       visible: true,
-      title: 'Unlink Partner?',
-      message: `Are you sure you want to remove ${partnerToUnlink.name} from this vault? They will lose access to shared savings.`,
-      icon: 'person-remove-outline',
-      confirmLabel: 'Unlink Partner',
+      title: 'Delete Partner?',
+      message: `Are you sure you want to remove ${partnerToDelete.name} from this vault? They will lose access to shared savings.`,
+      icon: 'trash-outline',
+      confirmLabel: 'Delete Partner',
       isDestructive: true,
       onConfirm: async () => {
         setConfirmConfig((prev) => ({ ...prev, visible: false }));
         setPBusy(true);
         setPErr(null);
         try {
-          await api.delete(`/vault/partner?userId=${partnerToUnlink.id}`);
+          await api.delete(`/vault/partner/${partnerToDelete.id}`);
           await Promise.all([refreshMe(), loadDirectory()]);
           setStatusConfig({
             visible: true,
-            title: 'Partner Unlinked',
-            message: `${partnerToUnlink.name} has been safely removed from this vault.`,
+            title: 'Partner Deleted',
+            message: `${partnerToDelete.name} has been safely removed from this vault.`,
             type: 'info',
           });
         } catch (e: any) {
-          setPErr(e.message);
+          setStatusConfig({
+            visible: true,
+            title: 'Error',
+            message: e.message || 'Could not delete partner',
+            type: 'error',
+          });
         } finally {
           setPBusy(false);
         }
@@ -260,6 +265,69 @@ export default function AccountScreen() {
         </T>
         {v && <T size={13} muted>Vault Invite Code: <T weight="700" color={c.accent}>{v.invite_code}</T></T>}
       </Card>
+
+      {/* Dedicated Vault Partners Card with Delete Partner Button */}
+      {v && (
+        <Card>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Ionicons name="people-outline" size={20} color={c.accent} />
+              <T weight="700" size={16}>Vault Partners ({partnersList.length})</T>
+            </View>
+          </View>
+
+          {partnersList.length === 0 ? (
+            <T muted size={13}>No partners linked to this vault yet.</T>
+          ) : (
+            <View style={{ gap: 8, marginTop: 4 }}>
+              {partnersList.map((p) => (
+                <View
+                  key={p.id}
+                  style={{
+                    backgroundColor: c.cardAlt,
+                    padding: 12,
+                    borderRadius: 12,
+                    flexDirection: 'row',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    borderWidth: 1,
+                    borderColor: c.border,
+                  }}>
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Ionicons name="person-circle-outline" size={22} color={c.accent} />
+                      <T size={14} weight="700">{p.name}</T>
+                    </View>
+                    {p.email && <T size={12} muted>{p.email}</T>}
+                  </View>
+
+                  {isMasterAdmin && (
+                    <Pressable
+                      onPress={() => handleDeletePartner(p)}
+                      disabled={pBusy}
+                      hitSlop={8}
+                      style={({ pressed }) => ({
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 4,
+                        backgroundColor: c.danger + '20',
+                        paddingHorizontal: 10,
+                        paddingVertical: 7,
+                        borderRadius: 8,
+                        borderWidth: 1,
+                        borderColor: c.danger + '40',
+                        opacity: pressed || pBusy ? 0.6 : 1,
+                      })}>
+                      <Ionicons name="trash-outline" size={13} color={c.danger} />
+                      <T size={12} weight="700" color={c.danger}>Delete Partner</T>
+                    </Pressable>
+                  )}
+                </View>
+              ))}
+            </View>
+          )}
+        </Card>
+      )}
 
       {/* MASTER ADMIN PORTAL */}
       {isMasterAdmin && (
@@ -347,17 +415,23 @@ export default function AccountScreen() {
 
                     {user.isLinkedToMyVault ? (
                       <Pressable
-                        onPress={() => handleUnlinkPartner(user)}
+                        onPress={() => handleDeletePartner(user)}
                         disabled={pBusy}
                         hitSlop={8}
                         style={({ pressed }) => ({
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 4,
                           backgroundColor: c.danger + '20',
                           paddingHorizontal: 12,
                           paddingVertical: 6,
                           borderRadius: 8,
+                          borderWidth: 1,
+                          borderColor: c.danger + '40',
                           opacity: pressed || pBusy ? 0.6 : 1,
                         })}>
-                        <T size={12} weight="700" color={c.danger}>Unlink</T>
+                        <Ionicons name="trash-outline" size={13} color={c.danger} />
+                        <T size={12} weight="700" color={c.danger}>Delete Partner</T>
                       </Pressable>
                     ) : (
                       <Pressable

@@ -287,6 +287,16 @@ money.delete('/notifications', h(async (req, res) => {
   res.json({ ok: true, message: 'All notifications cleared' });
 }));
 
+money.delete('/notifications/:id', h(async (req, res) => {
+  await admin.from('notifications').delete().eq('id', req.params.id).eq('user_id', req.userId);
+  res.json({ ok: true, message: 'Notification deleted' });
+}));
+
+money.delete('/activity/:id', h(async (req, res) => {
+  await admin.from('activity').delete().eq('id', req.params.id).eq('vault_id', req.vaultId!);
+  res.json({ ok: true, message: 'Activity deleted' });
+}));
+
 money.post('/notifications/clear', h(async (req, res) => {
   await admin.from('notifications').delete().eq('user_id', req.userId);
   res.json({ ok: true, message: 'All notifications cleared' });

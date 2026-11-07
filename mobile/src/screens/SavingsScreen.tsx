@@ -5,7 +5,7 @@ import { api } from '../api';
 import { useAuth } from '../auth';
 import { useTheme } from '../theme';
 import { Loan, Notif, Summary } from '../types';
-import { Button, Card, ErrorText, Input, ProgressBar, Screen, StatusModal, T, money, useLoad } from '../ui';
+import { Button, Card, ErrorText, Input, ProgressBar, Screen, StatusModal, SwipeableItem, T, money, useLoad } from '../ui';
 
 export default function SavingsScreen() {
   const { c } = useTheme();
@@ -151,24 +151,27 @@ export default function SavingsScreen() {
 
       {/* Immediate Partner Activity & Savings Notification Banner */}
       {data?.partnerNotif && (
-        <Card style={{
-          borderColor: c.accent,
-          borderWidth: 1.5,
-          backgroundColor: c.accent + '18',
-        }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
-              <Ionicons name="sparkles" size={24} color={c.accent} />
-              <View style={{ flex: 1 }}>
-                <T weight="700" size={15} color={c.accent}>{data.partnerNotif.title}</T>
-                <T size={13}>{data.partnerNotif.body}</T>
+        <SwipeableItem onDelete={handleDismissReminder}>
+          <Card style={{
+            borderColor: c.accent,
+            borderWidth: 1.5,
+            backgroundColor: c.accent + '18',
+          }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                <Ionicons name="sparkles" size={24} color={c.accent} />
+                <View style={{ flex: 1 }}>
+                  <T weight="700" size={15} color={c.accent}>{data.partnerNotif.title}</T>
+                  <T size={13}>{data.partnerNotif.body}</T>
+                  <T size={11} muted style={{ marginTop: 2 }}>Swipe right to dismiss</T>
+                </View>
               </View>
+              <Pressable onPress={handleDismissReminder} hitSlop={8} style={{ padding: 4 }}>
+                <Ionicons name="close" size={18} color={c.muted} />
+              </Pressable>
             </View>
-            <Pressable onPress={handleDismissReminder} hitSlop={8} style={{ padding: 4 }}>
-              <Ionicons name="close" size={18} color={c.muted} />
-            </Pressable>
-          </View>
-        </Card>
+          </Card>
+        </SwipeableItem>
       )}
 
       {/* Immediate Pending Loan Request Requiring Approval */}
