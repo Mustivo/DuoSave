@@ -17,5 +17,8 @@
         "EXPO_PUBLIC_API_URL": "https://backend-wheat-six-65.vercel.app/api"
       }
     }
+  },
+  "submit": {
+    "production": {}
   }
 }
