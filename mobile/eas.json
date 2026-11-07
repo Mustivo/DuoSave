@@ -2,7 +2,17 @@
   "build": {
     "preview": {
       "distribution": "internal",
-      "android": { "buildType": "apk" },
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://backend-wheat-six-65.vercel.app/api"
+      }
+    },
+    "production": {
+      "android": {
+        "buildType": "apk"
+      },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://backend-wheat-six-65.vercel.app/api"
       }
