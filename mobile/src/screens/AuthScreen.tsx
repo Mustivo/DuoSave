@@ -40,18 +40,18 @@ export default function AuthScreen() {
   const sendOtp = async () => {
     const trimmedEmail = email.trim();
     if (!trimmedEmail) {
-      setErr('Please enter your email address.');
+      setErr('Enter your email');
       return;
     }
     if (!trimmedEmail.includes('@') || !trimmedEmail.includes('.')) {
-      setErr('Please enter a valid email address (e.g. name@example.com).');
+      setErr('Enter a valid email');
       return;
     }
     setBusy(true); setErr(null); setMsg(null);
     try {
       await api.post('/auth/forgot-password', { email: trimmedEmail.toLowerCase() });
       setMode('verify-code');
-      setMsg(`Verification code sent to ${trimmedEmail}. Enter it below to confirm.`);
+      setMsg(`Code sent to ${trimmedEmail}`);
     } catch (e: any) {
       setErr(e.message);
     } finally {
@@ -63,19 +63,19 @@ export default function AuthScreen() {
     const trimmedEmail = email.trim();
     const trimmedOtp = otp.trim();
     if (!trimmedEmail) {
-      setErr('Please enter your email address.');
+      setErr('Enter your email');
       return;
     }
     if (!trimmedEmail.includes('@') || !trimmedEmail.includes('.')) {
-      setErr('Please enter a valid email address.');
+      setErr('Enter a valid email');
       return;
     }
     if (!trimmedOtp) {
-      setErr('Please enter the verification code sent to your email.');
+      setErr('Enter verification code');
       return;
     }
     if (trimmedOtp.length < 4) {
-      setErr('Please enter the complete verification code.');
+      setErr('Enter complete code');
       return;
     }
 
@@ -87,7 +87,7 @@ export default function AuthScreen() {
       });
       setVerifiedUserId(res.userId);
       setMode('set-password');
-      setMsg('Code confirmed! Please enter your new password.');
+      setMsg('Code confirmed. Enter your new password.');
     } catch (e: any) {
       setErr(e.message);
     } finally {
@@ -97,19 +97,19 @@ export default function AuthScreen() {
 
   const submitSetPassword = async () => {
     if (!pw) {
-      setErr('Please enter a new password.');
+      setErr('Enter new password');
       return;
     }
     if (pw.length < 6) {
-      setErr('New password must be at least 6 characters.');
+      setErr('Password must be at least 6 characters');
       return;
     }
     if (!confirmPw) {
-      setErr('Please confirm your new password.');
+      setErr('Confirm your password');
       return;
     }
     if (pw !== confirmPw) {
-      setErr('Passwords do not match. Please re-enter them.');
+      setErr('Passwords do not match');
       return;
     }
 
@@ -126,7 +126,7 @@ export default function AuthScreen() {
       setConfirmPw('');
       setOtp('');
       setVerifiedUserId(null);
-      setMsg('Password updated successfully! You can now sign in.');
+      setMsg('Password updated. You can now sign in.');
       setStatusConfig({
         visible: true,
         type: 'success',
@@ -143,19 +143,19 @@ export default function AuthScreen() {
   const submitLogin = async () => {
     const trimmedEmail = email.trim();
     if (!trimmedEmail) {
-      setErr('Please enter your email address.');
+      setErr('Enter your email');
       return;
     }
     if (!trimmedEmail.includes('@') || !trimmedEmail.includes('.')) {
-      setErr('Please enter a valid email address (e.g. name@example.com).');
+      setErr('Enter a valid email');
       return;
     }
     if (!pw) {
-      setErr('Please enter your password.');
+      setErr('Enter your password');
       return;
     }
     if (pw.length < 6) {
-      setErr('Password must be at least 6 characters.');
+      setErr('Password must be at least 6 characters');
       return;
     }
 

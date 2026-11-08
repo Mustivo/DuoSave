@@ -36,12 +36,12 @@ app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     let userMsg = 'Please verify your input and try again.';
     if (issue) {
       const field = issue.path[0];
-      if (field === 'amount') userMsg = 'Please enter a valid amount greater than 0.';
-      else if (field === 'email') userMsg = 'Please enter a valid email address.';
-      else if (field === 'name') userMsg = 'Please enter a valid name (1-40 characters).';
-      else if (field === 'code') userMsg = 'Please enter a valid invite code.';
-      else if (field === 'password') userMsg = issue.message?.includes('at least') ? 'Password must be at least 6 characters.' : (issue.message || 'Please provide a valid password.');
-      else userMsg = issue.message || 'Invalid input provided.';
+      if (field === 'amount') userMsg = 'Enter a valid amount';
+      else if (field === 'email') userMsg = 'Enter a valid email';
+      else if (field === 'name') userMsg = 'Enter a valid name';
+      else if (field === 'code') userMsg = 'Enter a valid code';
+      else if (field === 'password') userMsg = 'Password must be at least 6 characters';
+      else userMsg = issue.message || 'Invalid input';
     }
     return res.status(400).json({ error: userMsg });
   }

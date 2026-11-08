@@ -49,10 +49,10 @@ auth.post('/login', h(async (req, res) => {
 
   if (error || !data.session) {
     if (error?.message?.includes('Email not confirmed')) {
-      throw new HttpError(401, 'Your email has not been confirmed yet. Please verify your email or reset your password.');
+      throw new HttpError(401, 'Email not confirmed');
     }
     if (error?.message?.includes('rate limit') || error?.message?.includes('Too many')) {
-      throw new HttpError(429, 'Too many login attempts. For your security, please wait a moment before trying again.');
+      throw new HttpError(429, 'Too many attempts. Try later');
     }
 
     // Check if account exists with this email
@@ -63,13 +63,13 @@ auth.post('/login', h(async (req, res) => {
       });
 
       if (linkErr || !linkData?.user) {
-        throw new HttpError(401, 'No account found with this email. Please check your spelling or contact your administrator (stevenmwizerwa1@gmail.com).');
+        throw new HttpError(401, 'No account found with this email');
       }
     } catch (checkErr: any) {
       if (checkErr instanceof HttpError) throw checkErr;
     }
 
-    throw new HttpError(401, 'Incorrect password for this account. Please try again or tap "Forgot password" below to reset it.');
+    throw new HttpError(401, 'Incorrect password');
   }
 
   const me = await fetchMe(data.session.user.id, data.session.user.email);
@@ -117,7 +117,7 @@ auth.post('/verify-code', h(async (req, res) => {
   });
 
   if (vError || !vData.user) {
-    throw new HttpError(400, 'Invalid or expired verification code');
+    throw new HttpError(400, 'Invalid verification code');
   }
 
   res.json({ ok: true, userId: vData.user.id, email: targetEmail, message: 'Code verified successfully' });
@@ -141,7 +141,7 @@ auth.post('/set-password', h(async (req, res) => {
       type: 'recovery',
     });
     if (vError || !vData.user) {
-      throw new HttpError(400, 'Invalid or expired verification code');
+      throw new HttpError(400, 'Invalid verification code');
     }
     targetUserId = vData.user.id;
   }
