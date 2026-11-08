@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as SecureStore from 'expo-secure-store';
 import { useAuth } from '../auth';
 import { useTheme } from '../theme';
+import { useLanguage } from '../i18n';
 import { Button, Card, ConfirmModal, ErrorText, Input, Screen, StatusModal, T } from '../ui';
 
 export interface RuleSection {
@@ -17,7 +18,7 @@ export interface RuleSection {
   updatedAt?: string;
 }
 
-const DEFAULT_RULES: RuleSection[] = [
+const DEFAULT_RULES_EN: RuleSection[] = [
   {
     id: 'contributions',
     title: 'Savings contribution',
@@ -65,8 +66,57 @@ const DEFAULT_RULES: RuleSection[] = [
   },
 ];
 
+const DEFAULT_RULES_RW: RuleSection[] = [
+  {
+    id: 'contributions',
+    title: 'Ubwizigame bwa buri kwezi',
+    category: 'Savings',
+    subtitle: 'Itsinda ryatangiye tariki 1 Mutarama 2025 ryizigama arenga 80,000 RWF kugeza 9 Ukwakira 2025.',
+    items: [
+      'Buri munyamuryango yizigama 3,000 RWF buri kwezi.',
+      'Nyuma y\'ibyumweru bitatu by\'ukwezi gushya, utarazigama acibwa amande y\'inyongera ya 1,500 RWF.',
+      'Umunyamuryango ufite ikibazo cy\'ingutu ashobora kubabarirwa by\'agateganyo kugeza gikemutse. Abandi bakomeza kwizigama.',
+    ],
+  },
+  {
+    id: 'loan_fees',
+    title: 'Inyungu ku nguzanyo',
+    category: 'Loans',
+    items: [
+      '0 – 5,000 RWF: Nta nyungu icibwa (0 RWF)',
+      '5,001 – 14,000 RWF: Inyungu ni 1,500 RWF',
+      '14,001 – 22,000 RWF: Inyungu ni 3,000 RWF',
+      '22,001 – 35,000 RWF: Inyungu ni 4,000 RWF',
+      '35,001 – 50,000 RWF: Inyungu ni 5,000 RWF',
+      'Hejuru ya 50,000 RWF: Inyungu ni 6,500 RWF',
+    ],
+  },
+  {
+    id: 'loan_repayment',
+    title: 'Kwishyura inguzanyo',
+    category: 'Loans',
+    items: [
+      'Inguzanyo igomba kwishyurwa ku gihe. Ufite ikibazo cy\'ingutu ashobora kongererwa kugeza ku byumweru 9, ariko acibwe byibura 5% by\'inguzanyo.',
+      'Iyo inguzanyo itishyuwe mu byumweru 3, yongerwaho amande ya 1,500 RWF.',
+      'Umunyamuryango ufite inguzanyo itarishyurwa irenze 50,000 RWF ntiyemerewe indi nguzanyo keretse mu kibazo cyihutirwa cyane.',
+      'Iyo umunyamuryango agurije inshuti ye amafaranga y\'itsinda, aguma ari we ubyirengera iyo inshuti itishyuye.',
+    ],
+  },
+  {
+    id: 'new_rules_2026',
+    title: 'Amategeko mashya — 28 Nzeri 2026',
+    category: 'Policy',
+    items: [
+      'Gufungura konti muri BPR yo kubitsaho ubwizigame bw\'itsinda.',
+      'Kuva tariki 1 Mutarama 2027, umugabane w\'ukwezi uzaba 5,000 RWF.',
+      'Buri munyamuryango agomba gufata 30,000 RWF mu mezi 5. Ayishyurana n\'inyungu yemerewe. Utayifashe yishyura inyungu yayo hamwe n\'inyongera ya 3,000 RWF.',
+    ],
+  },
+];
+
 export default function SavingsRulesScreen() {
   const { c } = useTheme();
+  const { lang, t } = useLanguage();
   const { me } = useAuth();
   const storageKey = `duosave_rules_${me?.vault?.id ?? 'default'}`;
 
@@ -74,7 +124,8 @@ export default function SavingsRulesScreen() {
   const isVaultOwner = (me?.profile?.email?.toLowerCase() === 'stevenmwizerwa1@gmail.com') || !!me?.isAdmin;
   const adminName = isVaultOwner ? 'You (Master Admin)' : 'stevenmwizerwa1@gmail.com';
 
-  const [rules, setRules] = useState<RuleSection[]>(DEFAULT_RULES);
+  const defaultRules = lang === 'rw' ? DEFAULT_RULES_RW : DEFAULT_RULES_EN;
+  const [rules, setRules] = useState<RuleSection[]>(defaultRules);
   const [showAdd, setShowAdd] = useState(false);
   const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
 
@@ -111,29 +162,31 @@ export default function SavingsRulesScreen() {
     message: '',
   });
 
-  // Load saved rules from persistent storage
   useEffect(() => {
-    (async () => {
-      try {
-        const stored = await SecureStore.getItemAsync(storageKey);
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setRules(parsed);
-          }
+    SecureStore.getItemAsync(storageKey)
+      .then((saved) => {
+        if (saved) {
+          try {
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setRules(parsed);
+              return;
+            }
+          } catch {}
         }
-      } catch (e) {
-        console.warn('Failed to load saved rules:', e);
-      }
-    })();
-  }, [storageKey]);
+        setRules(lang === 'rw' ? DEFAULT_RULES_RW : DEFAULT_RULES_EN);
+      })
+      .catch(() => {
+        setRules(lang === 'rw' ? DEFAULT_RULES_RW : DEFAULT_RULES_EN);
+      });
+  }, [storageKey, lang]);
 
-  const saveRulesToStorage = async (updated: RuleSection[]) => {
-    setRules(updated);
+  const saveRulesToStorage = async (updatedRules: RuleSection[]) => {
+    setRules(updatedRules);
     try {
-      await SecureStore.setItemAsync(storageKey, JSON.stringify(updated));
-    } catch (e) {
-      console.warn('Failed to persist rules:', e);
+      await SecureStore.setItemAsync(storageKey, JSON.stringify(updatedRules));
+    } catch (e: any) {
+      console.warn('Could not persist rules to local storage:', e?.message);
     }
   };
 
@@ -143,29 +196,24 @@ export default function SavingsRulesScreen() {
     setTitle(rule.title);
     setSubtitle(rule.subtitle ?? '');
     setCategory(rule.category ?? 'General');
-    setRuleText(rule.items.join('\n'));
+    setRuleText(rule.items.join('\n• '));
     setShowAdd(true);
     setErr(null);
   };
 
   const cancelForm = () => {
+    setShowAdd(false);
     setEditingRuleId(null);
     setTitle('');
     setSubtitle('');
-    setRuleText('');
     setCategory('General');
-    setShowAdd(false);
+    setRuleText('');
     setErr(null);
   };
 
   const handleSaveRule = async () => {
     if (!isVaultOwner) {
-      setStatusConfig({
-        visible: true,
-        title: 'Permission Denied',
-        message: 'Only the vault admin can add or edit savings rules.',
-        type: 'error',
-      });
+      setErr('Only master admin can add or modify rules.');
       return;
     }
 
@@ -217,8 +265,8 @@ export default function SavingsRulesScreen() {
       await saveRulesToStorage(updated);
       setStatusConfig({
         visible: true,
-        title: 'Rule Added',
-        message: `"${newRule.title}" has been saved to group rules.`,
+        title: t('rule_saved_title'),
+        message: t('rule_saved_msg'),
         type: 'success',
       });
     }
@@ -231,15 +279,21 @@ export default function SavingsRulesScreen() {
 
     setConfirmConfig({
       visible: true,
-      title: 'Delete Rule?',
-      message: `Are you sure you want to delete "${ruleTitle}"? This rule will be permanently removed.`,
+      title: t('delete_rule_title'),
+      message: t('delete_rule_msg'),
       icon: 'trash-outline',
-      confirmLabel: 'Delete Rule',
+      confirmLabel: t('delete'),
       isDestructive: true,
       onConfirm: async () => {
         setConfirmConfig((prev) => ({ ...prev, visible: false }));
         const updated = rules.filter((r) => r.id !== ruleId);
         await saveRulesToStorage(updated);
+        setStatusConfig({
+          visible: true,
+          title: 'Rule Deleted',
+          message: `"${ruleTitle}" was removed from group rules.`,
+          type: 'info',
+        });
       },
     });
   };
@@ -247,23 +301,19 @@ export default function SavingsRulesScreen() {
   const confirmDeleteItem = (ruleId: string, itemIndex: number) => {
     if (!isVaultOwner) return;
 
-    setConfirmConfig({
-      visible: true,
-      title: 'Remove Rule Point?',
-      message: 'Are you sure you want to remove this bullet point from the rule?',
-      icon: 'remove-circle-outline',
-      confirmLabel: 'Remove Point',
-      isDestructive: true,
-      onConfirm: async () => {
-        setConfirmConfig((prev) => ({ ...prev, visible: false }));
-        const updated = rules.map((r) => {
-          if (r.id !== ruleId) return r;
-          const newItems = r.items.filter((_, idx) => idx !== itemIndex);
-          return { ...r, items: newItems };
-        }).filter((r) => r.items.length > 0);
-        await saveRulesToStorage(updated);
-      },
+    const rule = rules.find((r) => r.id === ruleId);
+    if (!rule) return;
+
+    const updated = rules.map((r) => {
+      if (r.id !== ruleId) return r;
+      return {
+        ...r,
+        items: r.items.filter((_, idx) => idx !== itemIndex),
+        updatedAt: new Date().toISOString(),
+      };
     });
+
+    saveRulesToStorage(updated);
   };
 
   const resetToDefaults = () => {
@@ -278,7 +328,7 @@ export default function SavingsRulesScreen() {
       isDestructive: true,
       onConfirm: async () => {
         setConfirmConfig((prev) => ({ ...prev, visible: false }));
-        await saveRulesToStorage(DEFAULT_RULES);
+        await saveRulesToStorage(defaultRules);
         setStatusConfig({
           visible: true,
           title: 'Reset Complete',
@@ -299,7 +349,7 @@ export default function SavingsRulesScreen() {
   };
 
   return (
-    <Screen title="Savings rules">
+    <Screen title={t('rules_title')}>
       {/* Top Banner indicating Admin permissions */}
       <View style={{
         backgroundColor: isVaultOwner ? c.accent + '15' : c.cardAlt,
@@ -338,42 +388,34 @@ export default function SavingsRulesScreen() {
               borderRadius: 10,
             }}>
             <Ionicons name={showAdd ? 'close' : 'add'} size={16} color={c.onAccent} />
-            <T size={12} weight="700" color={c.onAccent}>{showAdd ? 'Cancel' : 'Add Rule'}</T>
+            <T size={12} weight="700" color={c.onAccent}>{showAdd ? t('cancel') : t('add_new_rule')}</T>
           </Pressable>
         )}
       </View>
 
-      {/* Add / Edit Rule Form (Admin Only) */}
+      {/* Admin Add/Edit Rule Form */}
       {isVaultOwner && showAdd && (
         <Card style={{ borderColor: c.accent, borderWidth: 1.5 }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <T weight="700" size={16} color={c.accent}>
-              {editingRuleId ? '✏️ Edit Applied Rule' : '➕ Add New Rule Applied'}
-            </T>
-            <Pressable onPress={cancelForm}>
-              <Ionicons name="close-circle-outline" size={22} color={c.muted} />
-            </Pressable>
-          </View>
-          <T size={12} muted>Specify the rule title and describe the requirements for both partners.</T>
+          <T weight="700" size={16}>{editingRuleId ? 'Edit Rule Section' : t('add_new_rule')}</T>
 
           <Input
-            label="Rule Title"
-            placeholder="e.g. New rules — 15 November 2026"
+            label={t('rule_title_label')}
+            placeholder="e.g. Penalty for late attendance"
             value={title}
             onChangeText={setTitle}
           />
 
           <Input
-            label="Subtitle / Note (Optional)"
-            placeholder="e.g. Approved by group members"
+            label={t('rule_subtitle_label')}
+            placeholder="e.g. Effective starting October 2026"
             value={subtitle}
             onChangeText={setSubtitle}
           />
 
-          {/* Category selection */}
+          {/* Category Selector */}
           <View style={{ gap: 6 }}>
-            <T size={12} muted weight="600">Category</T>
-            <View style={{ flexDirection: 'row', gap: 8 }}>
+            <T size={12} muted weight="600">{t('rule_category')}</T>
+            <View style={{ flexDirection: 'row', gap: 6 }}>
               {(['Savings', 'Loans', 'Policy', 'General'] as const).map((cat) => (
                 <Pressable
                   key={cat}
@@ -385,36 +427,37 @@ export default function SavingsRulesScreen() {
                     alignItems: 'center',
                     backgroundColor: category === cat ? c.accent : c.cardAlt,
                   }}>
-                  <T size={12} weight="600" color={category === cat ? c.onAccent : c.text}>{cat}</T>
+                  <T size={11} weight="700" color={category === cat ? c.onAccent : c.text}>
+                    {cat}
+                  </T>
                 </Pressable>
               ))}
             </View>
           </View>
 
           <Input
-            label="Rule Details (one rule per line)"
-            placeholder="• Each member must contribute on the agreed date&#10;• Late penalties apply after 3 weeks"
-            multiline
-            numberOfLines={4}
-            style={{ minHeight: 90, textAlignVertical: 'top' }}
+            label={t('rule_items_label')}
+            placeholder={t('rule_placeholder')}
             value={ruleText}
             onChangeText={setRuleText}
+            multiline
+            numberOfLines={4}
           />
 
           <ErrorText msg={err} />
 
           <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
             <View style={{ flex: 1 }}>
-              <Button label="Cancel" variant="ghost" onPress={cancelForm} />
+              <Button label={t('save')} onPress={handleSaveRule} />
             </View>
             <View style={{ flex: 1 }}>
-              <Button label={editingRuleId ? 'Update Rule' : 'Save Rule'} onPress={handleSaveRule} />
+              <Button label={t('cancel')} variant="ghost" onPress={cancelForm} />
             </View>
           </View>
         </Card>
       )}
 
-      {/* Render all rule cards */}
+      {/* Rules List */}
       {rules.map((rule) => {
         const catColor = getCategoryColor(rule.category);
         return (
@@ -481,7 +524,7 @@ export default function SavingsRulesScreen() {
       )}
 
       <T muted size={12} style={{ textAlign: 'center', marginTop: 4 }}>
-        All members must follow these rules so that our savings can grow.
+        {t('rules_subtitle')}
       </T>
 
       {/* Admin option to reset to defaults */}

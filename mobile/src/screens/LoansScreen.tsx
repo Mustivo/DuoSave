@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { api } from '../api';
 import { useAuth } from '../auth';
 import { useTheme } from '../theme';
+import { useLanguage } from '../i18n';
 import { Loan, Summary } from '../types';
 import { Button, Card, ConfirmModal, ErrorText, Input, Screen, StatusModal, SwipeableItem, T, money, useLoad } from '../ui';
 
@@ -27,6 +28,7 @@ export function calculateProfitCharge(principal: number): number {
 
 export default function LoansScreen() {
   const { c } = useTheme();
+  const { t } = useLanguage();
   const { me } = useAuth();
   const { data, loading, error, reload } = useLoad(async () => {
     const [summary, loans] = await Promise.all([
@@ -80,7 +82,7 @@ export default function LoansScreen() {
   }, []);
 
   const cur = data?.summary.vault.currency ?? 'RWF';
-  const isVaultOwner = (me?.profile.email?.toLowerCase() === 'stevenmwizerwa1@gmail.com') || !!me?.isAdmin;
+  const isVaultOwner = (me?.profile.email?.toLowerCase() === 'stevenmwizerwa1@gmail.com') || !me?.isAdmin;
   const nameOf = (id: string, fallback?: string) =>
     data?.summary.members.find((m) => m.id === id)?.name ?? fallback ?? 'Partner';
 
@@ -115,10 +117,10 @@ export default function LoansScreen() {
 
     setConfirmConfig({
       visible: true,
-      title: 'Submit Loan Request?',
-      message: `Principal: ${money(n, cur)}\nRule Profit Charge: ${fee > 0 ? `+${money(fee, cur)}` : 'RWF 0'}\nTotal to Repay: ${money(totalDue, cur)}\n\nYour partner will be notified to review and approve this loan before funds are disbursed.`,
+      title: t('request_a_loan') + '?',
+      message: `Principal: ${money(n, cur)}\n${t('profit_charge')}: ${fee > 0 ? `+${money(fee, cur)}` : 'RWF 0'}\n${t('total_repayment')}: ${money(totalDue, cur)}`,
       icon: 'hourglass-outline',
-      confirmLabel: 'Submit Request',
+      confirmLabel: t('submit_loan_request'),
       isDestructive: false,
       onConfirm: async () => {
         setConfirmConfig((prev) => ({ ...prev, visible: false }));
@@ -129,8 +131,8 @@ export default function LoansScreen() {
           await reload();
           setStatusConfig({
             visible: true,
-            title: 'Request Sent',
-            message: `Your loan request for ${money(n, cur)} (Total repayment: ${money(totalDue, cur)}) was submitted! Your partner has been notified to approve it.`,
+            title: t('loan_requested_title'),
+            message: t('loan_requested_msg'),
             type: 'success',
           });
         } catch (e: any) {
@@ -145,10 +147,10 @@ export default function LoansScreen() {
     const requesterName = nameOf(loan.borrower_id, loan.requester_name);
     setConfirmConfig({
       visible: true,
-      title: 'Approve Loan Request?',
-      message: `Are you sure you want to approve ${requesterName}'s loan for ${money(Number(loan.amount), cur)}? This amount will be disbursed and deducted from available vault savings.`,
+      title: t('approve_loan') + '?',
+      message: `Are you sure you want to approve ${requesterName}'s loan for ${money(Number(loan.amount), cur)}?`,
       icon: 'checkmark-circle-outline',
-      confirmLabel: 'Approve & Release Funds',
+      confirmLabel: t('approve_loan'),
       isDestructive: false,
       onConfirm: async () => {
         setConfirmConfig((prev) => ({ ...prev, visible: false }));
@@ -159,13 +161,13 @@ export default function LoansScreen() {
           setStatusConfig({
             visible: true,
             title: 'Loan Approved',
-            message: `You approved ${requesterName}'s loan of ${money(Number(loan.amount), cur)}.`,
+            message: `Loan for ${requesterName} (${money(Number(loan.amount), cur)}) has been approved.`,
             type: 'success',
           });
         } catch (e: any) {
           setStatusConfig({
             visible: true,
-            title: 'Approval Error',
+            title: t('error'),
             message: e.message,
             type: 'error',
           });
@@ -179,10 +181,10 @@ export default function LoansScreen() {
     const requesterName = nameOf(loan.borrower_id, loan.requester_name);
     setConfirmConfig({
       visible: true,
-      title: 'Decline Loan Request?',
-      message: `Are you sure you want to decline ${requesterName}'s loan request of ${money(Number(loan.amount), cur)}?`,
+      title: t('decline_loan') + '?',
+      message: `Are you sure you want to decline ${requesterName}'s loan request for ${money(Number(loan.amount), cur)}?`,
       icon: 'close-circle-outline',
-      confirmLabel: 'Decline Loan',
+      confirmLabel: t('decline_loan'),
       isDestructive: true,
       onConfirm: async () => {
         setConfirmConfig((prev) => ({ ...prev, visible: false }));
@@ -193,13 +195,13 @@ export default function LoansScreen() {
           setStatusConfig({
             visible: true,
             title: 'Loan Declined',
-            message: `You declined ${requesterName}'s loan request.`,
+            message: `Loan request for ${requesterName} has been declined.`,
             type: 'info',
           });
         } catch (e: any) {
           setStatusConfig({
             visible: true,
-            title: 'Error',
+            title: t('error'),
             message: e.message,
             type: 'error',
           });
@@ -212,10 +214,10 @@ export default function LoansScreen() {
   const handleCancelMyRequest = (loan: Loan) => {
     setConfirmConfig({
       visible: true,
-      title: 'Cancel Your Request?',
+      title: t('cancel_request') + '?',
       message: `Do you want to cancel your pending loan request for ${money(Number(loan.amount), cur)}?`,
       icon: 'close-outline',
-      confirmLabel: 'Cancel Request',
+      confirmLabel: t('cancel_request'),
       isDestructive: true,
       onConfirm: async () => {
         setConfirmConfig((prev) => ({ ...prev, visible: false }));
@@ -232,7 +234,7 @@ export default function LoansScreen() {
         } catch (e: any) {
           setStatusConfig({
             visible: true,
-            title: 'Error',
+            title: t('error'),
             message: e.message,
             type: 'error',
           });
@@ -252,8 +254,8 @@ export default function LoansScreen() {
       await reload();
       setStatusConfig({
         visible: true,
-        title: 'Repayment Recorded',
-        message: `Successfully repaid ${money(n, cur)} back to the vault!`,
+        title: t('repayment_recorded_title'),
+        message: t('repayment_recorded_msg', { amount: money(n, cur) }),
         type: 'success',
       });
     } catch (e: any) {
@@ -264,10 +266,10 @@ export default function LoansScreen() {
   const confirmDeleteLoan = (id: string, loanAmount: number | string) => {
     setConfirmConfig({
       visible: true,
-      title: 'Delete Loan Record?',
-      message: `Are you sure you want to remove this loan of ${money(Number(loanAmount), cur)}? The available vault balance will be updated immediately.`,
+      title: t('delete_loan_confirm_title'),
+      message: t('delete_loan_confirm_msg', { amount: money(Number(loanAmount), cur) }),
       icon: 'trash-outline',
-      confirmLabel: 'Delete Loan',
+      confirmLabel: t('delete'),
       isDestructive: true,
       onConfirm: async () => {
         setConfirmConfig((prev) => ({ ...prev, visible: false }));
@@ -289,13 +291,13 @@ export default function LoansScreen() {
   const pastLoans = allLoans.filter((l) => l.status === 'repaid' || l.status === 'rejected');
 
   return (
-    <Screen title="Loans & Approvals" onRefresh={reload} refreshing={loading}>
+    <Screen title={t('loans_title')} onRefresh={reload} refreshing={loading}>
       <ErrorText msg={error} />
       {data && (
         <Card>
-          <T muted size={12}>Available to borrow</T>
+          <T muted size={12}>{t('available_to_borrow')}</T>
           <T size={32} weight="800">{money(data.summary.available, cur)}</T>
-          <T size={12} muted>Loans require partner approval before funds are withdrawn from shared savings.</T>
+          <T size={12} muted>{t('borrow_desc')}</T>
         </Card>
       )}
 
@@ -305,11 +307,11 @@ export default function LoansScreen() {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <Ionicons name="alert-circle" size={22} color={c.warn} />
             <T weight="700" size={16} color={c.warn}>
-              Action Required ({pendingApprovalsForMe.length})
+              {t('action_required', { count: pendingApprovalsForMe.length })}
             </T>
           </View>
           <T size={13} muted>
-            Your partner requested a loan. Please review and approve or decline:
+            {t('partner_requested_loan_desc')}
           </T>
           {pendingApprovalsForMe.map((l) => {
             const borrowerName = nameOf(l.borrower_id, l.requester_name);
@@ -330,13 +332,13 @@ export default function LoansScreen() {
                 {l.purpose && <T size={13} muted>{l.purpose}</T>}
                 <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
                   <Button
-                    label="Approve"
+                    label={t('approve')}
                     variant="primary"
                     onPress={() => handleApproveLoan(l)}
                     loading={busy}
                   />
                   <Button
-                    label="Decline"
+                    label={t('decline')}
                     variant="ghost"
                     onPress={() => handleRejectLoan(l)}
                     loading={busy}
@@ -353,7 +355,7 @@ export default function LoansScreen() {
         <Card style={{ borderColor: c.accent, borderWidth: 1 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <Ionicons name="time-outline" size={20} color={c.accent} />
-            <T weight="700" size={16}>Your Pending Loan Requests</T>
+            <T weight="700" size={16}>{t('status_pending')}</T>
           </View>
           <T size={13} muted>
             Waiting for your partner to review and approve:
@@ -373,7 +375,7 @@ export default function LoansScreen() {
               <View style={{ flex: 1, gap: 2 }}>
                 <T weight="700" size={15}>{money(Number(l.amount), cur)}</T>
                 {l.purpose && <T size={12} muted>{l.purpose}</T>}
-                <T size={11} color={c.warn} weight="600">⏳ Awaiting Approval</T>
+                <T size={11} color={c.warn} weight="600">⏳ {t('status_pending')}</T>
               </View>
               <Pressable
                 onPress={() => handleCancelMyRequest(l)}
@@ -385,7 +387,7 @@ export default function LoansScreen() {
                   borderRadius: 8,
                   opacity: pressed ? 0.6 : 1,
                 })}>
-                <T size={12} weight="700" color={c.danger}>Cancel</T>
+                <T size={12} weight="700" color={c.danger}>{t('cancel')}</T>
               </Pressable>
             </View>
           ))}
@@ -394,7 +396,7 @@ export default function LoansScreen() {
 
       {/* Request Loan Form */}
       <Card>
-        <T weight="700" size={16}>Request a Loan</T>
+        <T weight="700" size={16}>{t('request_a_loan')}</T>
         <T size={13} muted>
           Enter the amount you wish to borrow. Group profit charges apply according to our savings rules.
         </T>
@@ -406,13 +408,13 @@ export default function LoansScreen() {
               <T size={13} weight="700" color={c.warn}>Rule Restriction</T>
             </View>
             <T size={12}>
-              You currently have an unpaid loan balance of {money(myUnpaidBalance, cur)}. Rules forbid additional loans above 50,000 RWF unless there is a serious emergency. Specify "Emergency" in your purpose to request.
+              {t('unpaid_limit_warning')}
             </T>
           </View>
         )}
 
         <Input
-          label={`Principal Amount (${cur})`}
+          label={`${t('amount_label')} (${cur})`}
           value={amount}
           onChangeText={setAmount}
           keyboardType="decimal-pad"
@@ -434,27 +436,27 @@ export default function LoansScreen() {
               <T size={13} weight="600">{money(enteredAmount, cur)}</T>
             </View>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-              <T size={13} muted>Rule Profit Charge:</T>
+              <T size={13} muted>{t('profit_charge')}:</T>
               <T size={13} weight="700" color={calculatedFee > 0 ? c.warn : c.accent}>
                 {calculatedFee > 0 ? `+ ${money(calculatedFee, cur)}` : 'RWF 0 (No fee)'}
               </T>
             </View>
             <View style={{ height: 1, backgroundColor: c.border, marginVertical: 2 }} />
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <T size={14} weight="700">Total Repayment Due:</T>
+              <T size={14} weight="700">{t('total_repayment')}:</T>
               <T size={16} weight="800" color={c.accent}>{money(totalRepayDue, cur)}</T>
             </View>
           </View>
         )}
 
         <Input
-          label="Purpose"
+          label={t('purpose_label')}
           value={purpose}
           onChangeText={setPurpose}
-          placeholder="Flight tickets, repair, emergency..."
+          placeholder={t('purpose_placeholder')}
         />
         <ErrorText msg={err} />
-        <Button label="Submit Loan Request" onPress={requestLoan} loading={busy} />
+        <Button label={t('submit_loan_request')} onPress={requestLoan} loading={busy} />
       </Card>
 
       {/* Official Loan Rules Accordion */}
@@ -464,7 +466,7 @@ export default function LoansScreen() {
           style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <Ionicons name="document-text-outline" size={18} color={c.accent} />
-            <T weight="700" size={15}>Official Loan Profit Charges</T>
+            <T weight="700" size={15}>{t('official_rules_card')}</T>
           </View>
           <Ionicons name={showRules ? 'chevron-up' : 'chevron-down'} size={18} color={c.muted} />
         </Pressable>
@@ -485,7 +487,7 @@ export default function LoansScreen() {
       </Card>
 
       {/* Active Loans */}
-      <T weight="700" size={16}>Active Loans</T>
+      <T weight="700" size={16}>{t('active_loans_title')} ({activeLoans.length})</T>
       {activeLoans.length === 0 && <T muted>No active loans.</T>}
       {activeLoans.map((l) => {
         const owed = Number(l.amount) - Number(l.repaid);
@@ -494,9 +496,9 @@ export default function LoansScreen() {
         return (
           <Card key={l.id}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <T weight="700">{mine ? 'You' : nameOf(l.borrower_id, l.requester_name)}</T>
+              <T weight="700">{mine ? (t('you_label') ? `You (${t('you_label')})` : 'You') : nameOf(l.borrower_id, l.requester_name)}</T>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                <T weight="700" color={c.warn}>Active</T>
+                <T weight="700" color={c.warn}>{t('status_active')}</T>
                 {canDelete && (
                   <Pressable
                     onPress={() => confirmDeleteLoan(l.id, l.amount)}
@@ -515,9 +517,9 @@ export default function LoansScreen() {
                   value={repay[l.id] ?? ''}
                   onChangeText={(v) => setRepay({ ...repay, [l.id]: v })}
                   keyboardType="decimal-pad"
-                  placeholder={`Repay up to ${owed.toFixed(2)}`}
+                  placeholder={t('repay_amount_placeholder')}
                 />
-                <Button label="Repay Loan" variant="ghost" onPress={() => pay(l.id)} />
+                <Button label={t('repay_btn')} variant="ghost" onPress={() => pay(l.id)} />
               </View>
             )}
           </Card>
@@ -527,10 +529,10 @@ export default function LoansScreen() {
       {/* Past / Settled Loans */}
       {pastLoans.length > 0 && (
         <>
-          <T weight="700" size={16}>Past Loans</T>
+          <T weight="700" size={16}>{t('past_loans_title')} ({pastLoans.length})</T>
           {pastLoans.map((l) => {
             const mine = l.borrower_id === me?.profile.id;
-            const borrowerName = mine ? 'You' : nameOf(l.borrower_id, l.requester_name);
+            const borrowerName = mine ? (t('you_label') ? `You (${t('you_label')})` : 'You') : nameOf(l.borrower_id, l.requester_name);
             const isRepaid = l.status === 'repaid';
             const canDeletePast = mine || isVaultOwner;
             return (
@@ -540,7 +542,7 @@ export default function LoansScreen() {
                     <T weight="700">{borrowerName}</T>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                       <T weight="700" color={isRepaid ? c.accent : c.danger}>
-                        {isRepaid ? '✓ Repaid' : '✗ Declined'}
+                        {isRepaid ? t('status_repaid') : t('status_declined')}
                       </T>
                       {canDeletePast && (
                         <Pressable
@@ -554,7 +556,7 @@ export default function LoansScreen() {
                   </View>
                   {l.purpose && <T size={12} muted>{l.purpose}</T>}
                   <T size={13} muted>
-                    {money(Number(l.amount), cur)} {isRepaid ? '(Fully settled)' : '(Declined)'}
+                    {money(Number(l.amount), cur)} {isRepaid ? t('fully_settled') : t('declined')}
                   </T>
                 </Card>
               </SwipeableItem>

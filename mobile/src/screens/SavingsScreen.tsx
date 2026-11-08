@@ -4,11 +4,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { api } from '../api';
 import { useAuth } from '../auth';
 import { useTheme } from '../theme';
+import { useLanguage } from '../i18n';
 import { Loan, Notif, Summary } from '../types';
 import { Button, Card, ErrorText, Input, ProgressBar, Screen, StatusModal, SwipeableItem, T, money, useLoad } from '../ui';
 
 export default function SavingsScreen() {
   const { c } = useTheme();
+  const { t } = useLanguage();
   const { me, refreshMe } = useAuth();
   const { data, loading, error, reload } = useLoad(async () => {
     const [summary, notifs, loans] = await Promise.all([
@@ -68,8 +70,8 @@ export default function SavingsScreen() {
       await reload();
       setStatusConfig({
         visible: true,
-        title: 'Savings Added',
-        message: `Successfully contributed ${money(n, cur)} to the vault!`,
+        title: t('savings_added_title'),
+        message: t('savings_added_msg', { amount: money(n, cur) }),
         type: 'success',
       });
     } catch (e: any) {
@@ -94,32 +96,12 @@ export default function SavingsScreen() {
     } catch (e: any) {
       setStatusConfig({
         visible: true,
-        title: 'Error',
+        title: t('error'),
         message: e.message,
         type: 'error',
       });
     } finally {
       setSavingDay(false);
-    }
-  };
-
-  const handleSendReminderNow = async () => {
-    try {
-      await api.post('/vault/remind');
-      await reload();
-      setStatusConfig({
-        visible: true,
-        title: 'Reminder Sent',
-        message: 'Both partners have been notified on their dashboard.',
-        type: 'success',
-      });
-    } catch (e: any) {
-      setStatusConfig({
-        visible: true,
-        title: 'Error',
-        message: e.message,
-        type: 'error',
-      });
     }
   };
 
@@ -134,7 +116,7 @@ export default function SavingsScreen() {
   const s = data?.summary;
   const cur = s?.vault.currency ?? 'RWF';
   const memberColors = [c.accent, c.blue, '#9b5de5', '#f15bb5', '#fee440', '#00bbf9', '#00f5d4'];
-  const monthTotal = s?.members.reduce((t, m) => t + m.thisMonth, 0) ?? 0;
+  const monthTotal = s?.members.reduce((tot, m) => tot + m.thisMonth, 0) ?? 0;
   const reminderDay = s?.vault.reminder_day ?? 1;
 
   // Calculate day-of-month logic
@@ -146,7 +128,7 @@ export default function SavingsScreen() {
   const isPastDue = currentDay > reminderDay && monthTotal < (s?.vault.monthly_target ?? 0);
 
   return (
-    <Screen title="Savings" onRefresh={reload} refreshing={loading}>
+    <Screen title={t('savings_title')} onRefresh={reload} refreshing={loading}>
       <ErrorText msg={error} />
 
       {/* Immediate Partner Activity & Savings Notification Banner */}
@@ -163,7 +145,7 @@ export default function SavingsScreen() {
                 <View style={{ flex: 1 }}>
                   <T weight="700" size={15} color={c.accent}>{data.partnerNotif.title}</T>
                   <T size={13}>{data.partnerNotif.body}</T>
-                  <T size={11} muted style={{ marginTop: 2 }}>Swipe right to dismiss</T>
+                  <T size={11} muted style={{ marginTop: 2 }}>{t('swipe_to_dismiss')}</T>
                 </View>
               </View>
               <Pressable onPress={handleDismissReminder} hitSlop={8} style={{ padding: 4 }}>
@@ -184,9 +166,9 @@ export default function SavingsScreen() {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
             <Ionicons name="alert-circle" size={24} color={c.warn} />
             <View style={{ flex: 1, gap: 2 }}>
-              <T weight="700" size={15} color={c.warn}>Loan Request Awaiting Your Review</T>
+              <T weight="700" size={15} color={c.warn}>{t('loan_review_needed')}</T>
               <T size={13}>
-                Your partner requested a loan of {money(Number(data.pendingLoanForMe.amount), cur)}. Please open the Loans tab to review and approve.
+                {t('loan_review_desc', { amount: money(Number(data.pendingLoanForMe.amount), cur) })}
               </T>
             </View>
           </View>
@@ -214,7 +196,7 @@ export default function SavingsScreen() {
                   ? `⏰ Savings Day in ${daysUntilReminder} day${daysUntilReminder > 1 ? 's' : ''}`
                   : isPastDue
                   ? `⚠️ Savings Reminder (Due Day ${reminderDay})`
-                  : (data?.reminder?.title ?? 'Savings Reminder')}
+                  : (data?.reminder?.title ?? t('reminder_banner_title'))}
               </T>
             </View>
             <Pressable onPress={handleDismissReminder} hitSlop={8} style={{ padding: 4 }}>
@@ -238,7 +220,7 @@ export default function SavingsScreen() {
             {isVaultOwner && (
               <Pressable onPress={() => setShowEditDay(!showEditDay)} hitSlop={6}>
                 <T size={12} weight="700" color={c.accent}>
-                  {showEditDay ? 'Cancel' : 'Change Day'}
+                  {showEditDay ? t('cancel') : t('change_day')}
                 </T>
               </Pressable>
             )}
@@ -249,9 +231,9 @@ export default function SavingsScreen() {
       {/* Admin Quick Setting: Change Reminder Day */}
       {isVaultOwner && showEditDay && (
         <Card style={{ borderColor: c.accent, borderWidth: 1 }}>
-          <T weight="700" size={15}>Set Dashboard Notification Day</T>
+          <T weight="700" size={15}>{t('set_dashboard_notification_day')}</T>
           <T size={12} muted>
-            Select the day of the month when both you and your partner will see the savings notification on this dashboard:
+            {t('select_day_desc')}
           </T>
 
           <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
@@ -277,7 +259,7 @@ export default function SavingsScreen() {
           <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center', marginTop: 6 }}>
             <View style={{ flex: 1 }}>
               <Input
-                placeholder="Or custom day (1-28)"
+                placeholder={t('custom_day_placeholder')}
                 value={newDay}
                 onChangeText={setNewDay}
                 keyboardType="number-pad"
@@ -285,7 +267,7 @@ export default function SavingsScreen() {
               />
             </View>
             <Button
-              label="Set"
+              label={t('set')}
               loading={savingDay}
               onPress={() => {
                 const parsed = parseInt(newDay, 10);
@@ -294,8 +276,8 @@ export default function SavingsScreen() {
                 } else {
                   setStatusConfig({
                     visible: true,
-                    title: 'Invalid Day',
-                    message: 'Please choose a day between 1 and 28.',
+                    title: t('invalid_day_title'),
+                    message: t('invalid_day_msg'),
                     type: 'error',
                   });
                 }
@@ -307,9 +289,13 @@ export default function SavingsScreen() {
 
       {s && (
         <Card>
-          <T muted size={12}>Total account balance</T>
+          <T muted size={12}>{t('total_balance')}</T>
           <T size={36} weight="800">{money(s.available, cur)}</T>
-          {s.loanedOut > 0 && <T size={12} muted>{money(s.totalDeposited, cur)} saved, {money(s.loanedOut, cur)} out on loan</T>}
+          {s.loanedOut > 0 && (
+            <T size={12} muted>
+              {t('saved_amount_out', { saved: money(s.totalDeposited, cur), loaned: money(s.loanedOut, cur) })}
+            </T>
+          )}
           <ProgressBar parts={[
             ...(s.accountSavings && s.accountSavings > 0 ? [{ value: s.accountSavings, color: c.accent }] : []),
             ...s.members.map((m, i) => ({ value: m.total, color: memberColors[(i + 1) % memberColors.length] })),
@@ -317,13 +303,15 @@ export default function SavingsScreen() {
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 4 }}>
             {s.accountSavings !== undefined && s.accountSavings > 0 && (
               <View style={{ minWidth: 90 }}>
-                <T size={12} muted color={c.accent}>Account Funds</T>
+                <T size={12} muted color={c.accent}>{t('account_funds')}</T>
                 <T weight="700">{money(s.accountSavings, cur)}</T>
               </View>
             )}
             {s.members.map((m, i) => (
               <View key={m.id} style={{ minWidth: 90 }}>
-                <T size={12} muted color={memberColors[(i + 1) % memberColors.length]}>{m.id === me?.profile.id ? `${m.name} (you)` : m.name}</T>
+                <T size={12} muted color={memberColors[(i + 1) % memberColors.length]}>
+                  {m.id === me?.profile.id ? `${m.name} (${t('you_label')})` : m.name}
+                </T>
                 <T weight="700">{money(m.total, cur)}</T>
               </View>
             ))}
@@ -334,44 +322,48 @@ export default function SavingsScreen() {
       {s && s.vault.monthly_target > 0 && (
         <Card>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <T weight="700">This month's target</T>
+            <T weight="700">{t('this_month_target')}</T>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
               <Ionicons name="calendar-outline" size={14} color={c.accent} />
-              <T size={12} weight="600" color={c.accent}>Day {reminderDay} reminder</T>
+              <T size={12} weight="600" color={c.accent}>{t('day_reminder', { day: reminderDay })}</T>
             </View>
           </View>
           <ProgressBar parts={[
             { value: Math.min(monthTotal, s.vault.monthly_target), color: c.accent },
             { value: Math.max(s.vault.monthly_target - monthTotal, 0), color: 'transparent' },
           ]} />
-          <T size={12} muted>{money(monthTotal, cur)} of {money(s.vault.monthly_target, cur)} target</T>
+          <T size={12} muted>
+            {t('target_progress', { current: money(monthTotal, cur), target: money(s.vault.monthly_target, cur) })}
+          </T>
         </Card>
       )}
 
       {s && s.vault.savings_goal > 0 && (
         <Card>
-          <T weight="700">Long-term goal</T>
+          <T weight="700">{t('long_term_goal')}</T>
           <ProgressBar parts={[
             { value: Math.min(s.available, s.vault.savings_goal), color: c.accent },
             { value: Math.max(s.vault.savings_goal - s.available, 0), color: 'transparent' },
           ]} />
-          <T size={12} muted>{Math.round((s.available / s.vault.savings_goal) * 100)}% of {money(s.vault.savings_goal, cur)}</T>
+          <T size={12} muted>
+            {t('goal_progress', { percent: Math.round((s.available / s.vault.savings_goal) * 100), goal: money(s.vault.savings_goal, cur) })}
+          </T>
         </Card>
       )}
 
       <Card>
-        <T weight="700" size={16}>Add your savings</T>
-        <Input label={`Amount (${cur})`} value={amount} onChangeText={setAmount} keyboardType="decimal-pad" placeholder="0.00" />
-        <Input label="Note (optional)" value={note} onChangeText={setNote} placeholder="Salary, bonus, monthly contribution..." />
+        <T weight="700" size={16}>{t('add_your_savings')}</T>
+        <Input label={`${t('amount_label')} (${cur})`} value={amount} onChangeText={setAmount} keyboardType="decimal-pad" placeholder="0.00" />
+        <Input label={t('note_label')} value={note} onChangeText={setNote} placeholder={t('note_placeholder')} />
         <ErrorText msg={err} />
-        <Button label="Save" onPress={save} loading={busy} />
+        <Button label={t('save')} onPress={save} loading={busy} />
       </Card>
 
       {!me?.partner && me?.vault && (
         <Card>
-          <T weight="700">Invite your partner</T>
+          <T weight="700">{t('invite_partner')}</T>
           <T size={22} weight="800" color={c.accent}>{me.vault.invite_code}</T>
-          <T size={12} muted>They enter this code after creating an account.</T>
+          <T size={12} muted>{t('invite_partner_desc')}</T>
         </Card>
       )}
 

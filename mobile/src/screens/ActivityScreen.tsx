@@ -3,6 +3,7 @@ import { Pressable, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '../api';
 import { useTheme } from '../theme';
+import { useLanguage } from '../i18n';
 import { ActivityItem } from '../types';
 import { Card, ConfirmModal, ErrorText, Screen, StatusModal, SwipeableItem, T, money, timeAgo, useLoad } from '../ui';
 
@@ -16,6 +17,7 @@ const icons: Record<string, keyof typeof Ionicons.glyphMap> = {
 
 export default function ActivityScreen() {
   const { c } = useTheme();
+  const { t } = useLanguage();
   const { data, loading, error, reload } = useLoad(async () => {
     const items = await api.get<ActivityItem[]>('/activity');
     api.post('/notifications/read').catch(() => {});
@@ -50,15 +52,15 @@ export default function ActivityScreen() {
       await reload();
       setStatusConfig({
         visible: true,
-        title: 'Cleared',
-        message: 'All notifications and activity have been cleared.',
+        title: t('cleared_title'),
+        message: t('cleared_msg'),
         type: 'success',
       });
     } catch (e: any) {
       await reload();
       setStatusConfig({
         visible: true,
-        title: 'Error',
+        title: t('error'),
         message: e.message || 'Could not clear activity',
         type: 'error',
       });
@@ -76,15 +78,15 @@ export default function ActivityScreen() {
     }
   };
 
-  const color = (t: string) => (t === 'loan' ? c.warn : t === 'deposit' || t === 'repayment' ? c.accent : c.blue);
+  const color = (type: string) => (type === 'loan' ? c.warn : type === 'deposit' || type === 'repayment' ? c.accent : c.blue);
 
   return (
-    <Screen title="Activity & Alerts" onRefresh={reload} refreshing={loading}>
+    <Screen title={t('activity_title')} onRefresh={reload} refreshing={loading}>
       <ErrorText msg={error} />
 
       {/* Clear Notifications Header Action */}
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
-        <T weight="700" size={15}>Activity Feed</T>
+        <T weight="700" size={15}>{t('activity_feed')}</T>
         {items.length > 0 && (
           <Pressable
             onPress={() => setConfirmVisible(true)}
@@ -102,7 +104,7 @@ export default function ActivityScreen() {
               opacity: pressed ? 0.7 : 1,
             })}>
             <Ionicons name="trash-outline" size={14} color={c.danger} />
-            <T size={12} weight="700" color={c.danger}>Clear All</T>
+            <T size={12} weight="700" color={c.danger}>{t('clear_all')}</T>
           </Pressable>
         )}
       </View>
@@ -111,12 +113,12 @@ export default function ActivityScreen() {
       {items.length > 0 && (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
           <Ionicons name="arrow-forward" size={14} color={c.muted} />
-          <T size={12} muted>Swipe right on any alert to delete it</T>
+          <T size={12} muted>{t('swipe_to_delete_hint')}</T>
         </View>
       )}
 
       {items.length === 0 && !loading && (
-        <T muted style={{ marginTop: 12 }}>Nothing yet. Savings and loans from your vault show up here.</T>
+        <T muted style={{ marginTop: 12 }}>{t('empty_activity')}</T>
       )}
 
       {items.map((a) => (
@@ -146,10 +148,10 @@ export default function ActivityScreen() {
       {/* Confirmation Modal */}
       <ConfirmModal
         visible={confirmVisible}
-        title="Clear All Notifications & Activity?"
-        message="Are you sure you want to clear all notifications and activity from your feed?"
+        title={t('clear_all_title')}
+        message={t('clear_all_msg')}
         icon="trash-outline"
-        confirmLabel="Clear All"
+        confirmLabel={t('clear_all')}
         isDestructive={true}
         onConfirm={handleClearNotifications}
         onCancel={() => setConfirmVisible(false)}

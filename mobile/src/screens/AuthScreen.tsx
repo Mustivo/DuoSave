@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as SecureStore from 'expo-secure-store';
 import { useAuth } from '../auth';
 import { useTheme } from '../theme';
+import { useLanguage } from '../i18n';
 import { api } from '../api';
 import { Button, CopyrightFooter, ErrorText, Input, StatusModal, T } from '../ui';
 
@@ -13,6 +14,7 @@ type AuthMode = 'login' | 'forgot-choice' | 'verify-code' | 'set-password' | 're
 
 export default function AuthScreen() {
   const { c, isDark } = useTheme();
+  const { lang, setLang, t } = useLanguage();
   const { signIn } = useAuth();
   const [mode, setMode] = useState<AuthMode>('login');
   const [email, setEmail] = useState('');
@@ -40,18 +42,18 @@ export default function AuthScreen() {
   const sendOtp = async () => {
     const trimmedEmail = email.trim();
     if (!trimmedEmail) {
-      setErr('Enter your email');
+      setErr(t('enter_email'));
       return;
     }
     if (!trimmedEmail.includes('@') || !trimmedEmail.includes('.')) {
-      setErr('Enter a valid email');
+      setErr(t('enter_valid_email'));
       return;
     }
     setBusy(true); setErr(null); setMsg(null);
     try {
       await api.post('/auth/forgot-password', { email: trimmedEmail.toLowerCase() });
       setMode('verify-code');
-      setMsg(`Code sent to ${trimmedEmail}`);
+      setMsg(t('code_sent_to', { email: trimmedEmail }));
     } catch (e: any) {
       setErr(e.message);
     } finally {
@@ -62,11 +64,11 @@ export default function AuthScreen() {
   const submitVerifyCode = async () => {
     const trimmedOtp = otp.trim();
     if (!trimmedOtp) {
-      setErr('Enter verification code');
+      setErr(t('enter_verification_code'));
       return;
     }
     if (trimmedOtp.length < 4) {
-      setErr('Enter complete code');
+      setErr(t('enter_complete_code'));
       return;
     }
 
@@ -79,7 +81,7 @@ export default function AuthScreen() {
       setVerifiedUserId(res.userId);
       if (res.email) setEmail(res.email);
       setMode('set-password');
-      setMsg('Code confirmed. Enter your new password.');
+      setMsg(t('code_confirmed_subtitle'));
     } catch (e: any) {
       setErr(e.message);
     } finally {
@@ -89,19 +91,19 @@ export default function AuthScreen() {
 
   const submitSetPassword = async () => {
     if (!pw) {
-      setErr('Enter new password');
+      setErr(t('enter_new_password'));
       return;
     }
     if (pw.length < 6) {
-      setErr('Password must be at least 6 characters');
+      setErr(t('password_min_length'));
       return;
     }
     if (!confirmPw) {
-      setErr('Confirm your password');
+      setErr(t('confirm_password'));
       return;
     }
     if (pw !== confirmPw) {
-      setErr('Passwords do not match');
+      setErr(t('passwords_dont_match'));
       return;
     }
 
@@ -118,12 +120,12 @@ export default function AuthScreen() {
       setConfirmPw('');
       setOtp('');
       setVerifiedUserId(null);
-      setMsg('Password updated. You can now sign in.');
+      setMsg(t('password_updated_msg'));
       setStatusConfig({
         visible: true,
         type: 'success',
-        title: 'Password Updated',
-        message: 'Your new password has been set. You can now sign in.',
+        title: t('password_updated_title'),
+        message: t('password_updated_msg'),
       });
     } catch (e: any) {
       setErr(e.message);
@@ -135,19 +137,19 @@ export default function AuthScreen() {
   const submitLogin = async () => {
     const trimmedEmail = email.trim();
     if (!trimmedEmail) {
-      setErr('Enter your email');
+      setErr(t('enter_email'));
       return;
     }
     if (!trimmedEmail.includes('@') || !trimmedEmail.includes('.')) {
-      setErr('Enter a valid email');
+      setErr(t('enter_valid_email'));
       return;
     }
     if (!pw) {
-      setErr('Enter your password');
+      setErr(t('enter_password'));
       return;
     }
     if (pw.length < 6) {
-      setErr('Password must be at least 6 characters');
+      setErr(t('password_min_length'));
       return;
     }
 
@@ -165,6 +167,42 @@ export default function AuthScreen() {
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: c.bg }}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
+
+      {/* Top Language Toggle Switcher */}
+      <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 20, paddingTop: 6 }}>
+        <View style={{
+          flexDirection: 'row',
+          backgroundColor: c.cardAlt,
+          borderRadius: 20,
+          padding: 3,
+          borderWidth: 1,
+          borderColor: c.border,
+        }}>
+          <Pressable
+            onPress={() => setLang('en')}
+            hitSlop={6}
+            style={{
+              paddingHorizontal: 12,
+              paddingVertical: 5,
+              borderRadius: 16,
+              backgroundColor: lang === 'en' ? c.accent : 'transparent',
+            }}>
+            <T size={12} weight="700" color={lang === 'en' ? c.onAccent : c.muted}>EN</T>
+          </Pressable>
+          <Pressable
+            onPress={() => setLang('rw')}
+            hitSlop={6}
+            style={{
+              paddingHorizontal: 12,
+              paddingVertical: 5,
+              borderRadius: 16,
+              backgroundColor: lang === 'rw' ? c.accent : 'transparent',
+            }}>
+            <T size={12} weight="700" color={lang === 'rw' ? c.onAccent : c.muted}>RW</T>
+          </Pressable>
+        </View>
+      </View>
+
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -175,15 +213,15 @@ export default function AuthScreen() {
           showsVerticalScrollIndicator={false}>
           
           {/* Centered Logo Header */}
-          <View style={{ gap: 8, marginTop: 20, marginBottom: 16, alignItems: 'center' }}>
+          <View style={{ gap: 8, marginTop: 12, marginBottom: 16, alignItems: 'center' }}>
             <Image source={require('../../assets/icon.png')} style={{ width: 84, height: 84, borderRadius: 20 }} />
             <T size={32} weight="800" style={{ textAlign: 'center' }}>DuoSave</T>
             <T muted style={{ textAlign: 'center', maxWidth: 300 }}>
-              {mode === 'login' && 'Sign in to access your shared savings vault.'}
-              {mode === 'forgot-choice' && 'Choose an option to verify your code or reset your password.'}
-              {mode === 'verify-code' && 'Enter the verification code received when your partner linked you.'}
-              {mode === 'set-password' && 'Step 2: Create your new password.'}
-              {mode === 'request-code' && 'Enter your email to receive a password reset code.'}
+              {mode === 'login' && t('sign_in_subtitle')}
+              {mode === 'forgot-choice' && t('forgot_choices_subtitle')}
+              {mode === 'verify-code' && t('opt_use_code_desc')}
+              {mode === 'set-password' && t('step2_create_password')}
+              {mode === 'request-code' && t('enter_email_to_receive')}
             </T>
           </View>
 
@@ -191,7 +229,7 @@ export default function AuthScreen() {
           {mode === 'login' && (
             <>
               <Input
-                label="Email"
+                label={t('email')}
                 placeholder="your-email@example.com"
                 value={email}
                 onChangeText={setEmail}
@@ -201,7 +239,7 @@ export default function AuthScreen() {
 
               <View style={{ gap: 6 }}>
                 <Input
-                  label="Password"
+                  label={t('password')}
                   placeholder="Enter password"
                   value={pw}
                   onChangeText={setPw}
@@ -215,7 +253,7 @@ export default function AuthScreen() {
                 <Pressable
                   onPress={() => { setMode('forgot-choice'); setErr(null); setMsg(null); }}
                   style={{ alignSelf: 'flex-end', paddingVertical: 4 }}>
-                  <T size={13} color={c.accent} weight="600">Forgot password / First-time setup?</T>
+                  <T size={13} color={c.accent} weight="600">{t('forgot_password_question')}</T>
                 </Pressable>
               </View>
 
@@ -226,7 +264,7 @@ export default function AuthScreen() {
               )}
               <ErrorText msg={err} />
 
-              <Button label="Sign In" onPress={submitLogin} loading={busy} />
+              <Button label={t('sign_in')} onPress={submitLogin} loading={busy} />
             </>
           )}
 
@@ -250,13 +288,13 @@ export default function AuthScreen() {
                     <Ionicons name="key-outline" size={24} color={c.accent} />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <T weight="700" size={16} color={c.accent}>1. Use Verification Code</T>
-                    <T size={12} muted>Enter the verification code you received when your partner linked you.</T>
+                    <T weight="700" size={16} color={c.accent}>{t('opt_use_code')}</T>
+                    <T size={12} muted>{t('opt_use_code_desc')}</T>
                   </View>
                 </View>
                 <View style={{ marginTop: 6 }}>
                   <Button
-                    label="Enter Verification Code"
+                    label={t('opt_enter_code_btn')}
                     variant="primary"
                     onPress={() => { setMode('verify-code'); setErr(null); setMsg(null); }}
                   />
@@ -280,13 +318,13 @@ export default function AuthScreen() {
                     <Ionicons name="mail-unread-outline" size={24} color={c.blue} />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <T weight="700" size={16}>2. Send Reset Code to Email</T>
-                    <T size={12} muted>For existing linked members who forgot their password and need a new code sent.</T>
+                    <T weight="700" size={16}>{t('opt_send_reset')}</T>
+                    <T size={12} muted>{t('opt_send_reset_desc')}</T>
                   </View>
                 </View>
                 <View style={{ marginTop: 6 }}>
                   <Button
-                    label="Send Reset Code to Email"
+                    label={t('opt_send_reset_btn')}
                     variant="ghost"
                     onPress={() => { setMode('request-code'); setErr(null); setMsg(null); }}
                   />
@@ -294,7 +332,7 @@ export default function AuthScreen() {
               </Pressable>
 
               <Button
-                label="Back to Sign In"
+                label={t('back_to_sign_in')}
                 variant="ghost"
                 onPress={() => { setMode('login'); setErr(null); setMsg(null); }}
               />
@@ -305,8 +343,8 @@ export default function AuthScreen() {
           {mode === 'verify-code' && (
             <>
               <Input
-                label="Verification Code"
-                placeholder="Enter 6-digit code from email"
+                label={t('verification_code')}
+                placeholder="Enter 6-digit code"
                 value={otp}
                 onChangeText={setOtp}
                 keyboardType="number-pad"
@@ -320,16 +358,16 @@ export default function AuthScreen() {
               )}
               <ErrorText msg={err} />
 
-              <Button label="Verify Code" onPress={submitVerifyCode} loading={busy} />
+              <Button label={t('verify_code_btn')} onPress={submitVerifyCode} loading={busy} />
 
               <Button
-                label="Need a code? Send reset code"
+                label={t('need_code_prompt')}
                 variant="ghost"
                 onPress={() => { setMode('request-code'); setErr(null); setMsg(null); }}
               />
 
               <Button
-                label="Back to Options"
+                label={t('back_to_options')}
                 variant="ghost"
                 onPress={() => { setMode('forgot-choice'); setErr(null); setMsg(null); }}
               />
@@ -342,15 +380,15 @@ export default function AuthScreen() {
               <View style={{ backgroundColor: c.accent + '15', padding: 12, borderRadius: 10, borderColor: c.accent + '33', borderWidth: 1, gap: 4 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   <Ionicons name="checkmark-circle" size={18} color={c.accent} />
-                  <T size={13} weight="700" color={c.accent}>Verification Confirmed</T>
+                  <T size={13} weight="700" color={c.accent}>{t('code_confirmed_title')}</T>
                 </View>
                 <T size={12}>
-                  Code successfully verified{email ? ` for ${email}` : ''}. Please choose your new password.
+                  {t('code_confirmed_subtitle')}
                 </T>
               </View>
 
               <Input
-                label="New Password"
+                label={t('new_password')}
                 placeholder="Enter new password (min 6 chars)"
                 value={pw}
                 onChangeText={setPw}
@@ -363,7 +401,7 @@ export default function AuthScreen() {
               />
 
               <Input
-                label="Confirm New Password"
+                label={t('confirm_new_password')}
                 placeholder="Re-enter new password"
                 value={confirmPw}
                 onChangeText={setConfirmPw}
@@ -372,10 +410,10 @@ export default function AuthScreen() {
 
               <ErrorText msg={err} />
 
-              <Button label="Save New Password" onPress={submitSetPassword} loading={busy} />
+              <Button label={t('save_new_password')} onPress={submitSetPassword} loading={busy} />
 
               <Button
-                label="Back to Sign In"
+                label={t('back_to_sign_in')}
                 variant="ghost"
                 onPress={() => { setMode('login'); setErr(null); setMsg(null); }}
               />
@@ -386,7 +424,7 @@ export default function AuthScreen() {
           {mode === 'request-code' && (
             <>
               <Input
-                label="Your Email"
+                label={t('your_email')}
                 placeholder="your-email@example.com"
                 value={email}
                 onChangeText={setEmail}
@@ -401,16 +439,16 @@ export default function AuthScreen() {
               )}
               <ErrorText msg={err} />
 
-              <Button label="Send Reset Code" onPress={sendOtp} loading={busy} />
+              <Button label={t('send_reset_code')} onPress={sendOtp} loading={busy} />
 
               <Button
-                label="Already have a code? Enter it here"
+                label={t('already_have_code')}
                 variant="ghost"
                 onPress={() => { setMode('verify-code'); setErr(null); setMsg(null); }}
               />
 
               <Button
-                label="Back to Options"
+                label={t('back_to_options')}
                 variant="ghost"
                 onPress={() => { setMode('forgot-choice'); setErr(null); setMsg(null); }}
               />

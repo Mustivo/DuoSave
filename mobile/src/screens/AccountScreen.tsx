@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { api } from '../api';
 import { useAuth } from '../auth';
 import { Mode, useTheme } from '../theme';
+import { useLanguage } from '../i18n';
 import { Profile } from '../types';
 import { Button, Card, ConfirmModal, CopyrightFooter, ErrorText, Input, Screen, StatusModal, T } from '../ui';
 
@@ -22,6 +23,7 @@ type SystemUser = {
 
 export default function AccountScreen() {
   const { c, mode, setMode } = useTheme();
+  const { lang, setLang, t } = useLanguage();
   const { me, refreshMe, signOut } = useAuth();
   const v = me?.vault;
 
@@ -196,10 +198,10 @@ export default function AccountScreen() {
   const handleDeletePartner = (partnerToDelete: { id: string; name: string }) => {
     setConfirmConfig({
       visible: true,
-      title: 'Delete Partner?',
-      message: `Are you sure you want to remove ${partnerToDelete.name} from this vault? They will lose access to shared savings.`,
+      title: t('delete_partner_title'),
+      message: t('delete_partner_msg', { name: partnerToDelete.name }),
       icon: 'trash-outline',
-      confirmLabel: 'Delete Partner',
+      confirmLabel: t('delete_partner'),
       isDestructive: true,
       onConfirm: async () => {
         setConfirmConfig((prev) => ({ ...prev, visible: false }));
@@ -210,14 +212,14 @@ export default function AccountScreen() {
           await Promise.all([refreshMe(), loadDirectory()]);
           setStatusConfig({
             visible: true,
-            title: 'Partner Deleted',
-            message: `${partnerToDelete.name} has been safely removed from this vault.`,
+            title: t('delete_partner'),
+            message: `${partnerToDelete.name} has been removed from this vault.`,
             type: 'info',
           });
         } catch (e: any) {
           setStatusConfig({
             visible: true,
-            title: 'Error',
+            title: t('error'),
             message: e.message || 'Could not delete partner',
             type: 'error',
           });
@@ -231,10 +233,10 @@ export default function AccountScreen() {
   const confirmSignOut = () => {
     setConfirmConfig({
       visible: true,
-      title: 'Sign Out?',
-      message: 'Are you sure you want to log out of your DuoSave account on this device?',
+      title: `${t('log_out')}?`,
+      message: t('log_out_confirm'),
       icon: 'log-out-outline',
-      confirmLabel: 'Log Out',
+      confirmLabel: t('log_out'),
       isDestructive: true,
       onConfirm: () => {
         setConfirmConfig((prev) => ({ ...prev, visible: false }));
@@ -246,7 +248,7 @@ export default function AccountScreen() {
   const partnersList = me?.partners && me.partners.length > 0 ? me.partners : (me?.partner ? [me.partner] : []);
 
   return (
-    <Screen title="Account">
+    <Screen title={t('account_title')}>
       {/* Profile Card */}
       <Card>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -272,12 +274,12 @@ export default function AccountScreen() {
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <Ionicons name="people-outline" size={20} color={c.accent} />
-              <T weight="700" size={16}>Vault Partners ({partnersList.length})</T>
+              <T weight="700" size={16}>{t('vault_partners')} ({partnersList.length})</T>
             </View>
           </View>
 
           {partnersList.length === 0 ? (
-            <T muted size={13}>No partners linked to this vault yet.</T>
+            <T muted size={13}>{t('no_partners')}</T>
           ) : (
             <View style={{ gap: 8, marginTop: 4 }}>
               {partnersList.map((p) => (
@@ -319,7 +321,7 @@ export default function AccountScreen() {
                         opacity: pressed || pBusy ? 0.6 : 1,
                       })}>
                       <Ionicons name="trash-outline" size={13} color={c.danger} />
-                      <T size={12} weight="700" color={c.danger}>Delete Partner</T>
+                      <T size={12} weight="700" color={c.danger}>{t('delete_partner')}</T>
                     </Pressable>
                   )}
                 </View>
@@ -475,16 +477,50 @@ export default function AccountScreen() {
         </>
       )}
 
+      {/* Language Settings */}
+      <Card>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Ionicons name="globe-outline" size={20} color={c.accent} />
+          <T weight="700" size={16}>{t('language')}</T>
+        </View>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <Pressable
+            onPress={() => setLang('en')}
+            style={{
+              flex: 1,
+              paddingVertical: 10,
+              borderRadius: 10,
+              alignItems: 'center',
+              backgroundColor: lang === 'en' ? c.accent : c.cardAlt,
+            }}>
+            <T weight="700" color={lang === 'en' ? c.onAccent : c.text}>English</T>
+          </Pressable>
+          <Pressable
+            onPress={() => setLang('rw')}
+            style={{
+              flex: 1,
+              paddingVertical: 10,
+              borderRadius: 10,
+              alignItems: 'center',
+              backgroundColor: lang === 'rw' ? c.accent : c.cardAlt,
+            }}>
+            <T weight="700" color={lang === 'rw' ? c.onAccent : c.text}>Ikinyarwanda</T>
+          </Pressable>
+        </View>
+      </Card>
+
       {/* Appearance Settings */}
       <Card>
-        <T weight="700" size={16}>Appearance</T>
+        <T weight="700" size={16}>{t('appearance')}</T>
         <View style={{ flexDirection: 'row', gap: 8 }}>
           {(['system', 'light', 'dark'] as Mode[]).map((m) => (
             <Pressable key={m} onPress={() => setMode(m)} style={{
               flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center',
               backgroundColor: mode === m ? c.accent : c.cardAlt,
             }}>
-              <T weight="600" color={mode === m ? c.onAccent : c.text}>{m[0].toUpperCase() + m.slice(1)}</T>
+              <T weight="600" color={mode === m ? c.onAccent : c.text}>
+                {m === 'system' ? t('system') : m === 'light' ? t('light') : t('dark')}
+              </T>
             </Pressable>
           ))}
         </View>
@@ -494,15 +530,15 @@ export default function AccountScreen() {
       {v && (
         <Card>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <T weight="700" size={16}>Savings Plan</T>
+            <T weight="700" size={16}>{t('savings_plan')}</T>
             {!isMasterAdmin && <T size={12} muted>Managed by {MASTER_ADMIN_EMAIL}</T>}
           </View>
-          <Input label={`Savings goal (${v.currency})`} value={goal} onChangeText={setGoal} keyboardType="decimal-pad" editable={isMasterAdmin} />
-          <Input label="Monthly target for the vault" value={target} onChangeText={setTarget} keyboardType="decimal-pad" editable={isMasterAdmin} />
+          <Input label={`${t('savings_goal')} (${v.currency})`} value={goal} onChangeText={setGoal} keyboardType="decimal-pad" editable={isMasterAdmin} />
+          <Input label={t('monthly_target')} value={target} onChangeText={setTarget} keyboardType="decimal-pad" editable={isMasterAdmin} />
           
           <View style={{ gap: 6 }}>
-            <T size={12} muted weight="600">Reminder day of the month (1 to 28)</T>
-            <T size={11} muted>All partners will see the savings alert notification on their dashboard on this day.</T>
+            <T size={12} muted weight="600">{t('reminder_day_label')}</T>
+            <T size={11} muted>{t('reminder_day_desc')}</T>
             {isMasterAdmin && (
               <View style={{ flexDirection: 'row', gap: 6, marginVertical: 4 }}>
                 {[1, 5, 15, 20, 25, 28].map((d) => (
@@ -526,15 +562,15 @@ export default function AccountScreen() {
 
           <ErrorText msg={err} />
           {isMasterAdmin ? (
-            <Button label="Save plan" onPress={saveSettings} />
+            <Button label={t('save_plan')} onPress={saveSettings} />
           ) : (
             <T size={12} muted style={{ textAlign: 'center' }}>Only master admin ({MASTER_ADMIN_EMAIL}) can edit the savings plan</T>
           )}
-          <Button label="Send reminder now" variant="ghost" onPress={remindNow} />
+          <Button label={t('send_reminder_now')} variant="ghost" onPress={remindNow} />
         </Card>
       )}
 
-      <Button label="Log out" variant="danger" onPress={confirmSignOut} />
+      <Button label={t('log_out')} variant="danger" onPress={confirmSignOut} />
 
       <CopyrightFooter />
 

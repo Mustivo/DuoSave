@@ -3,11 +3,13 @@ import { View } from 'react-native';
 import { api } from '../api';
 import { useAuth } from '../auth';
 import { useTheme } from '../theme';
+import { useLanguage } from '../i18n';
 import { Contribution, Summary } from '../types';
 import { Card, ErrorText, ProgressBar, Screen, T, money, useLoad } from '../ui';
 
 export default function AnalyticsScreen() {
   const { c } = useTheme();
+  const { t } = useLanguage();
   const { me } = useAuth();
   const { data, loading, error, reload } = useLoad(async () => {
     const [summary, list] = await Promise.all([api.get<Summary>('/vault/summary'), api.get<Contribution[]>('/savings')]);
@@ -28,10 +30,10 @@ export default function AnalyticsScreen() {
   const total = members.reduce((s, m) => s + m.total, 0);
 
   return (
-    <Screen title="Analytics" onRefresh={reload} refreshing={loading}>
+    <Screen title={t('analytics_title')} onRefresh={reload} refreshing={loading}>
       <ErrorText msg={error} />
       <Card>
-        <T weight="700" size={16}>Saved per month</T>
+        <T weight="700" size={16}>{t('saved_per_month')}</T>
         <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: 140, gap: 10 }}>
           {perMonth.map((p, i) => (
             <View key={i} style={{ flex: 1, alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}>
@@ -42,20 +44,20 @@ export default function AnalyticsScreen() {
         </View>
       </Card>
       <Card>
-        <T weight="700" size={16}>Who saved what</T>
+        <T weight="700" size={16}>{t('who_saved_what')}</T>
         <ProgressBar parts={members.map((m, i) => ({ value: m.total, color: colors[i % 2] }))} />
         {members.map((m, i) => (
           <View key={m.id} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-            <T color={colors[i % 2]} weight="600">{m.id === me?.profile.id ? `${m.name} (you)` : m.name}</T>
+            <T color={colors[i % 2]} weight="600">{m.id === me?.profile.id ? `${m.name} (${t('you_label')})` : m.name}</T>
             <T>{money(m.total, cur)} ({total ? Math.round((m.total / total) * 100) : 0}%)</T>
           </View>
         ))}
       </Card>
       <Card>
-        <T weight="700" size={16}>Money out on loan</T>
+        <T weight="700" size={16}>{t('money_out_on_loan')}</T>
         {members.map((m) => (
           <View key={m.id} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-            <T muted>{m.name} owes</T><T>{money(m.owed, cur)}</T>
+            <T muted>{t('owes_label', { name: m.name })}</T><T>{money(m.owed, cur)}</T>
           </View>
         ))}
       </Card>

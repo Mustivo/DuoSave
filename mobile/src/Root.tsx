@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { useAuth } from './auth';
 import { useTheme } from './theme';
+import { useLanguage } from './i18n';
 import { api } from './api';
 import { presentPhoneNotification, registerPush } from './push';
 import { SwipeableItem, T } from './ui';
@@ -26,6 +27,7 @@ const icon = (name: keyof typeof Ionicons.glyphMap, focused: keyof typeof Ionico
 
 export default function Root() {
   const { c, isDark } = useTheme();
+  const { t } = useLanguage();
   const { ready, me } = useAuth();
   const [activeBanner, setActiveBanner] = useState<{ id: string; title: string; body: string } | null>(null);
   const seenIds = useRef<Set<string>>(new Set());
@@ -136,15 +138,15 @@ export default function Root() {
       ) : (
         <Tab.Navigator screenOptions={{ headerShown: false, tabBarActiveTintColor: c.accent, tabBarInactiveTintColor: c.muted }}>
           {!me.vault ? (
-            <Tab.Screen name="Setup" component={SetupScreen} options={{ tabBarIcon: icon('wallet-outline', 'wallet') }} />
+            <Tab.Screen name="Setup" component={SetupScreen} options={{ tabBarLabel: t('tab_setup'), tabBarIcon: icon('wallet-outline', 'wallet') }} />
           ) : (
             <>
-              <Tab.Screen name="Savings" component={SavingsScreen} options={{ tabBarIcon: icon('wallet-outline', 'wallet') }} />
-              <Tab.Screen name="Loans" component={LoansScreen} options={{ tabBarIcon: icon('swap-horizontal-outline', 'swap-horizontal') }} />
-              <Tab.Screen name="Analytics" component={AnalyticsScreen} options={{ tabBarIcon: icon('stats-chart-outline', 'stats-chart') }} />
-              <Tab.Screen name="Activity" component={ActivityScreen} options={{ tabBarIcon: icon('notifications-outline', 'notifications') }} />
-              <Tab.Screen name="Rules" component={SavingsRulesScreen} options={{ tabBarIcon: icon('document-text-outline', 'document-text') }} />
-              <Tab.Screen name="Account" component={AccountScreen} options={{ tabBarIcon: icon('person-outline', 'person') }} />
+              <Tab.Screen name="Savings" component={SavingsScreen} options={{ tabBarLabel: t('tab_savings'), tabBarIcon: icon('wallet-outline', 'wallet') }} />
+              <Tab.Screen name="Loans" component={LoansScreen} options={{ tabBarLabel: t('tab_loans'), tabBarIcon: icon('swap-horizontal-outline', 'swap-horizontal') }} />
+              <Tab.Screen name="Analytics" component={AnalyticsScreen} options={{ tabBarLabel: t('tab_analytics'), tabBarIcon: icon('stats-chart-outline', 'stats-chart') }} />
+              <Tab.Screen name="Activity" component={ActivityScreen} options={{ tabBarLabel: t('tab_activity'), tabBarIcon: icon('notifications-outline', 'notifications') }} />
+              <Tab.Screen name="Rules" component={SavingsRulesScreen} options={{ tabBarLabel: t('tab_rules'), tabBarIcon: icon('document-text-outline', 'document-text') }} />
+              <Tab.Screen name="Account" component={AccountScreen} options={{ tabBarLabel: t('tab_account'), tabBarIcon: icon('person-outline', 'person') }} />
             </>
           )}
         </Tab.Navigator>

@@ -1,35 +1,46 @@
 import React, { useState } from 'react';
 import { api } from '../api';
 import { useAuth } from '../auth';
+import { useLanguage } from '../i18n';
 import { Button, Card, ErrorText, Input, Screen, T } from '../ui';
 
 export default function SetupScreen() {
   const { refreshMe, signOut } = useAuth();
-  const [name, setName] = useState('Our Savings'); const [cur, setCur] = useState('RWF');
+  const { t } = useLanguage();
+  const [name, setName] = useState('Our Savings');
+  const [cur, setCur] = useState('RWF');
   const [code, setCode] = useState('');
-  const [err, setErr] = useState<string | null>(null); const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   const run = async (fn: () => Promise<unknown>) => {
-    setBusy(true); setErr(null);
-    try { await fn(); await refreshMe(); } catch (e: any) { setErr(e.message); }
+    setBusy(true);
+    setErr(null);
+    try {
+      await fn();
+      await refreshMe();
+    } catch (e: any) {
+      setErr(e.message);
+    }
     setBusy(false);
   };
+
   return (
-    <Screen title="Set up your vault" onRefresh={refreshMe}>
-      <Card>         
-        <T weight="700" size={16}>Start a new vault</T>
-        <T muted size={13}>You will get a code to send to your partner.</T>
-        <Input label="Vault name" value={name} onChangeText={setName} autoCapitalize="words" />
-        <Input label="Currency (3 letters)" value={cur} onChangeText={(v) => setCur(v.toUpperCase())} maxLength={3} />
-        <Button label="Create vault" loading={busy} onPress={() => run(() => api.post('/vault', { name, currency: cur }))} />
+    <Screen title={t('setup_title')} onRefresh={refreshMe}>
+      <Card>
+        <T weight="700" size={16}>{t('start_new_vault')}</T>
+        <T muted size={13}>{t('start_new_vault_desc')}</T>
+        <Input label={t('vault_name')} value={name} onChangeText={setName} autoCapitalize="words" />
+        <Input label={t('currency_label')} value={cur} onChangeText={(v) => setCur(v.toUpperCase())} maxLength={3} />
+        <Button label={t('create_vault')} loading={busy} onPress={() => run(() => api.post('/vault', { name, currency: cur }))} />
       </Card>
       <Card>
-        <T weight="700" size={16}>Join your partner</T>
-        <Input label="Invite code" value={code} onChangeText={(v) => setCode(v.toUpperCase())} placeholder="DUO-XXXX-X" />
-        <Button label="Join vault" variant="ghost" loading={busy} onPress={() => run(() => api.post('/vault/join', { code }))} />
+        <T weight="700" size={16}>{t('join_partner')}</T>
+        <Input label={t('invite_code_label')} value={code} onChangeText={(v) => setCode(v.toUpperCase())} placeholder="DUO-XXXX-X" />
+        <Button label={t('join_vault')} variant="ghost" loading={busy} onPress={() => run(() => api.post('/vault/join', { code }))} />
       </Card>
       <ErrorText msg={err} />
-      <Button label="Log out" variant="ghost" onPress={signOut} />
+      <Button label={t('log_out')} variant="ghost" onPress={signOut} />
     </Screen>
   );
 }
