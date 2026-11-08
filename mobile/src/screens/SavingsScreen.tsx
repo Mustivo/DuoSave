@@ -307,14 +307,23 @@ export default function SavingsScreen() {
 
       {s && (
         <Card>
-          <T muted size={12}>Total duo balance</T>
+          <T muted size={12}>Total account balance</T>
           <T size={36} weight="800">{money(s.available, cur)}</T>
           {s.loanedOut > 0 && <T size={12} muted>{money(s.totalDeposited, cur)} saved, {money(s.loanedOut, cur)} out on loan</T>}
-          <ProgressBar parts={s.members.map((m, i) => ({ value: m.total, color: memberColors[i % memberColors.length] }))} />
+          <ProgressBar parts={[
+            ...(s.accountSavings && s.accountSavings > 0 ? [{ value: s.accountSavings, color: c.accent }] : []),
+            ...s.members.map((m, i) => ({ value: m.total, color: memberColors[(i + 1) % memberColors.length] })),
+          ]} />
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 4 }}>
+            {s.accountSavings !== undefined && s.accountSavings > 0 && (
+              <View style={{ minWidth: 90 }}>
+                <T size={12} muted color={c.accent}>Account Funds</T>
+                <T weight="700">{money(s.accountSavings, cur)}</T>
+              </View>
+            )}
             {s.members.map((m, i) => (
               <View key={m.id} style={{ minWidth: 90 }}>
-                <T size={12} muted color={memberColors[i % memberColors.length]}>{m.id === me?.profile.id ? `${m.name} (you)` : m.name}</T>
+                <T size={12} muted color={memberColors[(i + 1) % memberColors.length]}>{m.id === me?.profile.id ? `${m.name} (you)` : m.name}</T>
                 <T weight="700">{money(m.total, cur)}</T>
               </View>
             ))}

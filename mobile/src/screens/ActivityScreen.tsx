@@ -41,20 +41,25 @@ export default function ActivityScreen() {
 
   const handleClearNotifications = async () => {
     setConfirmVisible(false);
+    setItems([]);
     try {
-      await api.delete('/notifications');
+      await Promise.all([
+        api.delete('/activity'),
+        api.delete('/notifications').catch(() => {}),
+      ]);
       await reload();
       setStatusConfig({
         visible: true,
-        title: 'Notifications Cleared',
-        message: 'All notifications have been cleared from your account.',
+        title: 'Cleared',
+        message: 'All notifications and activity have been cleared.',
         type: 'success',
       });
     } catch (e: any) {
+      await reload();
       setStatusConfig({
         visible: true,
         title: 'Error',
-        message: e.message || 'Could not clear notifications',
+        message: e.message || 'Could not clear activity',
         type: 'error',
       });
     }
@@ -80,24 +85,26 @@ export default function ActivityScreen() {
       {/* Clear Notifications Header Action */}
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
         <T weight="700" size={15}>Activity Feed</T>
-        <Pressable
-          onPress={() => setConfirmVisible(true)}
-          hitSlop={8}
-          style={({ pressed }) => ({
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 4,
-            backgroundColor: c.cardAlt,
-            paddingHorizontal: 10,
-            paddingVertical: 6,
-            borderRadius: 8,
-            borderWidth: 1,
-            borderColor: c.border,
-            opacity: pressed ? 0.7 : 1,
-          })}>
-          <Ionicons name="trash-outline" size={14} color={c.danger} />
-          <T size={12} weight="700" color={c.danger}>Clear Notifications</T>
-        </Pressable>
+        {items.length > 0 && (
+          <Pressable
+            onPress={() => setConfirmVisible(true)}
+            hitSlop={8}
+            style={({ pressed }) => ({
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 4,
+              backgroundColor: c.cardAlt,
+              paddingHorizontal: 10,
+              paddingVertical: 6,
+              borderRadius: 8,
+              borderWidth: 1,
+              borderColor: c.border,
+              opacity: pressed ? 0.7 : 1,
+            })}>
+            <Ionicons name="trash-outline" size={14} color={c.danger} />
+            <T size={12} weight="700" color={c.danger}>Clear All</T>
+          </Pressable>
+        )}
       </View>
 
       {/* Swipe Right to Delete Hint */}
@@ -139,10 +146,10 @@ export default function ActivityScreen() {
       {/* Confirmation Modal */}
       <ConfirmModal
         visible={confirmVisible}
-        title="Clear All Notifications?"
-        message="Are you sure you want to clear all pending notifications and alerts from your device?"
+        title="Clear All Notifications & Activity?"
+        message="Are you sure you want to clear all notifications and activity from your feed?"
         icon="trash-outline"
-        confirmLabel="Clear Notifications"
+        confirmLabel="Clear All"
         isDestructive={true}
         onConfirm={handleClearNotifications}
         onCancel={() => setConfirmVisible(false)}

@@ -334,7 +334,7 @@ vault.get('/vault/summary', requireVault, h(async (req, res) => {
   const [{ data: bal }, { data: v }, { data: contribs }, { data: ms }, { data: loans }] = await Promise.all([
     admin.from('vault_balances').select('*').eq('vault_id', vid).single(),
     admin.from('vaults').select('*').eq('id', vid).single(),
-    admin.from('contributions').select('user_id,amount,created_at').eq('vault_id', vid),
+    admin.from('contributions').select('user_id,amount,note,created_at').eq('vault_id', vid),
     admin.from('vault_members').select('user_id').eq('vault_id', vid),
     admin.from('loans').select('borrower_id,amount,repaid,status').eq('vault_id', vid),
   ]);
@@ -342,8 +342,13 @@ vault.get('/vault/summary', requireVault, h(async (req, res) => {
   const { data: profiles } = await admin.from('profiles').select('id,name').in('id', ids);
   const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
 
+  const accountSavings = (contribs ?? [])
+    .filter((c) => c.note === 'Account savings')
+    .reduce((s, c) => s + Number(c.amount), 0);
+
   const members = (profiles ?? []).map((p) => {
-    const mine = (contribs ?? []).filter((c) => c.user_id === p.id);
+    // Only personal contributions are assigned to individual members
+    const mine = (contribs ?? []).filter((c) => c.user_id === p.id && c.note !== 'Account savings');
     const owed = (loans ?? []).filter((l) => l.borrower_id === p.id && l.status === 'active')
       .reduce((s, l) => s + Number(l.amount) - Number(l.repaid), 0);
     return {
@@ -358,6 +363,7 @@ vault.get('/vault/summary', requireVault, h(async (req, res) => {
     totalDeposited: Number(bal?.total_deposited ?? 0),
     loanedOut: Number(bal?.loaned_out ?? 0),
     available: Number(bal?.available ?? 0),
+    accountSavings,
     members,
   });
 }));

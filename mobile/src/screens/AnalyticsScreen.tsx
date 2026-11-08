@@ -22,7 +22,7 @@ export default function AnalyticsScreen() {
     return { key: `${d.getFullYear()}-${d.getMonth()}`, label: d.toLocaleString('en-US', { month: 'short' }) };
   });
   const perMonth = months.map((mo) => members.map((m) =>
-    (data?.list ?? []).filter((x) => x.user_id === m.id && (() => { const d = new Date(x.created_at); return `${d.getFullYear()}-${d.getMonth()}` === mo.key; })())
+    (data?.list ?? []).filter((x) => x.user_id === m.id && x.note !== 'Account savings' && (() => { const d = new Date(x.created_at); return `${d.getFullYear()}-${d.getMonth()}` === mo.key; })())
       .reduce((s, x) => s + Number(x.amount), 0)));
   const max = Math.max(1, ...perMonth.map((p) => p.reduce((a, b) => a + b, 0)));
   const total = members.reduce((s, m) => s + m.total, 0);

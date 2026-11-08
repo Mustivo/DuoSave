@@ -14,7 +14,7 @@ export type Me = {
 };
 export type Member = { id: string; name: string; total: number; thisMonth: number; owed: number };
 export type Summary = {
-  vault: Vault; totalDeposited: number; loanedOut: number; available: number; members: Member[];
+  vault: Vault; totalDeposited: number; loanedOut: number; available: number; accountSavings?: number; members: Member[];
 };
 export type Contribution = { id: string; user_id: string; amount: number; note: string | null; created_at: string };
 export type Loan = {
