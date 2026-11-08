@@ -322,8 +322,8 @@ money.delete('/loans/:id', h(async (req, res) => {
   if (l.borrower_id !== req.userId && !isMaster) {
     throw new HttpError(403, `Only the borrower or master administrator (${MASTER_ADMIN_EMAIL}) can delete this loan`);
   }
-  if (Number(l.repaid) > 0) {
-    throw new HttpError(400, 'Cannot delete a loan that has partial repayments');
+  if (l.status === 'active' && Number(l.repaid) > 0) {
+    throw new HttpError(400, 'Cannot delete an active loan with partial repayments');
   }
   await admin.from('loans').delete().eq('id', req.params.id);
   await logAndAlertPartner(req.vaultId!, req.userId, 'loan', `Loan record of ${l.amount} was deleted`);

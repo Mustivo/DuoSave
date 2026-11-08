@@ -5,7 +5,7 @@ import { api } from '../api';
 import { useAuth } from '../auth';
 import { useTheme } from '../theme';
 import { Loan, Summary } from '../types';
-import { Button, Card, ConfirmModal, ErrorText, Input, Screen, StatusModal, T, money, useLoad } from '../ui';
+import { Button, Card, ConfirmModal, ErrorText, Input, Screen, StatusModal, SwipeableItem, T, money, useLoad } from '../ui';
 
 /**
  * DuoSave Official Loan Rules Profit Charges:
@@ -80,6 +80,7 @@ export default function LoansScreen() {
   }, []);
 
   const cur = data?.summary.vault.currency ?? 'RWF';
+  const isVaultOwner = (me?.profile.email?.toLowerCase() === 'stevenmwizerwa1@gmail.com') || !!me?.isAdmin;
   const nameOf = (id: string, fallback?: string) =>
     data?.summary.members.find((m) => m.id === id)?.name ?? fallback ?? 'Partner';
 
@@ -531,19 +532,32 @@ export default function LoansScreen() {
             const mine = l.borrower_id === me?.profile.id;
             const borrowerName = mine ? 'You' : nameOf(l.borrower_id, l.requester_name);
             const isRepaid = l.status === 'repaid';
+            const canDeletePast = mine || isVaultOwner;
             return (
-              <Card key={l.id}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <T weight="700">{borrowerName}</T>
-                  <T weight="700" color={isRepaid ? c.accent : c.danger}>
-                    {isRepaid ? '✓ Repaid' : '✗ Declined'}
+              <SwipeableItem key={l.id} onDelete={() => api.delete(`/loans/${l.id}`).then(() => reload()).catch(() => {})}>
+                <Card>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <T weight="700">{borrowerName}</T>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                      <T weight="700" color={isRepaid ? c.accent : c.danger}>
+                        {isRepaid ? '✓ Repaid' : '✗ Declined'}
+                      </T>
+                      {canDeletePast && (
+                        <Pressable
+                          onPress={() => confirmDeleteLoan(l.id, l.amount)}
+                          hitSlop={8}
+                          style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}>
+                          <Ionicons name="trash-outline" size={18} color={c.danger} />
+                        </Pressable>
+                      )}
+                    </View>
+                  </View>
+                  {l.purpose && <T size={12} muted>{l.purpose}</T>}
+                  <T size={13} muted>
+                    {money(Number(l.amount), cur)} {isRepaid ? '(Fully settled)' : '(Declined)'}
                   </T>
-                </View>
-                {l.purpose && <T size={12} muted>{l.purpose}</T>}
-                <T size={13} muted>
-                  {money(Number(l.amount), cur)} {isRepaid ? '(Fully settled)' : '(Declined)'}
-                </T>
-              </Card>
+                </Card>
+              </SwipeableItem>
             );
           })}
         </>
