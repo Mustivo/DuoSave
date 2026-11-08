@@ -39,7 +39,7 @@ async function raw(method: string, path: string, body?: unknown) {
   });
 }
 
-export function humanizeErrorMessage(rawError: any, status?: number): string {
+export function humanizeErrorMessage(rawError: any, status?: number, path?: string): string {
   if (!rawError) return 'An unexpected error occurred. Please try again.';
 
   let msg = typeof rawError === 'string' ? rawError : (rawError?.message || rawError?.error || '');
@@ -50,8 +50,40 @@ export function humanizeErrorMessage(rawError: any, status?: number): string {
     return 'Unable to connect to DuoSave servers. Please check your internet connection.';
   }
 
-  // Session & Authentication
-  if (status === 401 || /jwt|unauthorized|invalid token|session expired/i.test(msg)) {
+  // Authentication & Sign-in specific error handling
+  const isAuthPath = path ? path.startsWith('/auth') : false;
+
+  if (isAuthPath || /login|password|credentials/i.test(msg)) {
+    if (/no account found|user not found|email not found/i.test(msg)) {
+      return msg.includes('administrator')
+        ? msg
+        : 'No account found with this email. Please check your spelling or contact your administrator (stevenmwizerwa1@gmail.com).';
+    }
+    if (/incorrect password|wrong password/i.test(msg)) {
+      return 'Incorrect password. Please double-check your password or tap "Forgot password" below to reset it.';
+    }
+    if (/invalid login credentials|email or password is wrong/i.test(msg)) {
+      return 'The email or password you entered is incorrect. Please verify your details and try again.';
+    }
+    if (/email not confirmed/i.test(msg)) {
+      return 'Your email has not been verified yet. Please check your inbox or reset your password.';
+    }
+    if (/too many|rate limit/i.test(msg)) {
+      return 'Too many login attempts. For your security, please wait a moment before trying again.';
+    }
+    if (/invalid or expired verification code|token has expired|otp/i.test(msg)) {
+      return 'Invalid or expired verification code. Please check your email or request a new code.';
+    }
+    if (/password must be at least/i.test(msg)) {
+      return 'Password must be at least 6 characters.';
+    }
+    if (/passwords do not match/i.test(msg)) {
+      return 'Passwords do not match. Please re-enter them.';
+    }
+  }
+
+  // Session expiration (for authenticated in-app calls only)
+  if (!isAuthPath && (status === 401 || /jwt|unauthorized|invalid token|session expired/i.test(msg))) {
     return 'Your session has expired. Please sign in again to continue.';
   }
   if (status === 403 || /forbidden|permission|only the vault/i.test(msg)) {
@@ -102,7 +134,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     res = await raw(method, path, body);
   } catch (e: any) {
     console.warn(`[API] Failed: ${method} ${BASE}${path}:`, e?.message);
-    throw new Error(humanizeErrorMessage(e?.message));
+    throw new Error(humanizeErrorMessage(e?.message, undefined, path));
   }
 
   if (res.status === 401 && refreshToken && !path.startsWith('/auth')) {
@@ -126,7 +158,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   if (!res.ok) {
     console.warn(`[API] Error ${res.status} from ${method} ${path}:`, json.error || text);
     const rawError = json.error ?? (text && text.length < 120 ? text : 'Something went wrong');
-    throw new Error(humanizeErrorMessage(rawError, res.status));
+    throw new Error(humanizeErrorMessage(rawError, res.status, path));
   }
   return json as T;
 }

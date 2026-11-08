@@ -40,8 +40,38 @@ auth.post('/register', h(async (req, res) => {
 
 auth.post('/login', h(async (req, res) => {
   const body = creds.parse(req.body);
-  const { data, error } = await anon.auth.signInWithPassword(body);
-  if (error || !data.session) throw new HttpError(401, 'Email or password is wrong');
+  const targetEmail = body.email.trim().toLowerCase();
+
+  const { data, error } = await anon.auth.signInWithPassword({
+    email: targetEmail,
+    password: body.password,
+  });
+
+  if (error || !data.session) {
+    if (error?.message?.includes('Email not confirmed')) {
+      throw new HttpError(401, 'Your email has not been confirmed yet. Please verify your email or reset your password.');
+    }
+    if (error?.message?.includes('rate limit') || error?.message?.includes('Too many')) {
+      throw new HttpError(429, 'Too many login attempts. For your security, please wait a moment before trying again.');
+    }
+
+    // Check if account exists with this email
+    try {
+      const { data: linkData, error: linkErr } = await admin.auth.admin.generateLink({
+        type: 'recovery',
+        email: targetEmail,
+      });
+
+      if (linkErr || !linkData?.user) {
+        throw new HttpError(401, 'No account found with this email. Please check your spelling or contact your administrator (stevenmwizerwa1@gmail.com).');
+      }
+    } catch (checkErr: any) {
+      if (checkErr instanceof HttpError) throw checkErr;
+    }
+
+    throw new HttpError(401, 'Incorrect password for this account. Please try again or tap "Forgot password" below to reset it.');
+  }
+
   const me = await fetchMe(data.session.user.id, data.session.user.email);
   res.json({ token: data.session.access_token, refreshToken: data.session.refresh_token, me });
 }));

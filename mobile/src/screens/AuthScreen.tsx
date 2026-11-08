@@ -38,15 +38,20 @@ export default function AuthScreen() {
   }, []);
 
   const sendOtp = async () => {
-    if (!email.trim() || !email.includes('@')) {
-      setErr('Please enter a valid email address');
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) {
+      setErr('Please enter your email address.');
+      return;
+    }
+    if (!trimmedEmail.includes('@') || !trimmedEmail.includes('.')) {
+      setErr('Please enter a valid email address (e.g. name@example.com).');
       return;
     }
     setBusy(true); setErr(null); setMsg(null);
     try {
-      await api.post('/auth/forgot-password', { email: email.trim().toLowerCase() });
+      await api.post('/auth/forgot-password', { email: trimmedEmail.toLowerCase() });
       setMode('verify-code');
-      setMsg(`Verification code sent to ${email.trim()}. Enter it below to confirm.`);
+      setMsg(`Verification code sent to ${trimmedEmail}. Enter it below to confirm.`);
     } catch (e: any) {
       setErr(e.message);
     } finally {
@@ -55,14 +60,30 @@ export default function AuthScreen() {
   };
 
   const submitVerifyCode = async () => {
-    if (!email.trim() || !email.includes('@')) { setErr('Please enter your email address'); return; }
-    if (!otp.trim()) { setErr('Please enter the verification code'); return; }
+    const trimmedEmail = email.trim();
+    const trimmedOtp = otp.trim();
+    if (!trimmedEmail) {
+      setErr('Please enter your email address.');
+      return;
+    }
+    if (!trimmedEmail.includes('@') || !trimmedEmail.includes('.')) {
+      setErr('Please enter a valid email address.');
+      return;
+    }
+    if (!trimmedOtp) {
+      setErr('Please enter the verification code sent to your email.');
+      return;
+    }
+    if (trimmedOtp.length < 4) {
+      setErr('Please enter the complete verification code.');
+      return;
+    }
 
     setBusy(true); setErr(null); setMsg(null);
     try {
       const res = await api.post<{ ok: boolean; userId: string }>('/auth/verify-code', {
-        email: email.trim().toLowerCase(),
-        otp: otp.trim(),
+        email: trimmedEmail.toLowerCase(),
+        otp: trimmedOtp,
       });
       setVerifiedUserId(res.userId);
       setMode('set-password');
@@ -75,8 +96,22 @@ export default function AuthScreen() {
   };
 
   const submitSetPassword = async () => {
-    if (!pw || pw.length < 6) { setErr('New password must be at least 6 characters'); return; }
-    if (pw !== confirmPw) { setErr('Passwords do not match'); return; }
+    if (!pw) {
+      setErr('Please enter a new password.');
+      return;
+    }
+    if (pw.length < 6) {
+      setErr('New password must be at least 6 characters.');
+      return;
+    }
+    if (!confirmPw) {
+      setErr('Please confirm your new password.');
+      return;
+    }
+    if (pw !== confirmPw) {
+      setErr('Passwords do not match. Please re-enter them.');
+      return;
+    }
 
     setBusy(true); setErr(null); setMsg(null);
     try {
@@ -106,13 +141,28 @@ export default function AuthScreen() {
   };
 
   const submitLogin = async () => {
-    if (!email.trim()) { setErr('Please enter your email'); return; }
-    if (!pw) { setErr('Please enter your password'); return; }
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) {
+      setErr('Please enter your email address.');
+      return;
+    }
+    if (!trimmedEmail.includes('@') || !trimmedEmail.includes('.')) {
+      setErr('Please enter a valid email address (e.g. name@example.com).');
+      return;
+    }
+    if (!pw) {
+      setErr('Please enter your password.');
+      return;
+    }
+    if (pw.length < 6) {
+      setErr('Password must be at least 6 characters.');
+      return;
+    }
 
     setBusy(true); setErr(null); setMsg(null);
     try {
-      await signIn(email.trim().toLowerCase(), pw);
-      SecureStore.setItemAsync('duo_last_email', email.trim().toLowerCase()).catch(() => {});
+      await signIn(trimmedEmail.toLowerCase(), pw);
+      SecureStore.setItemAsync('duo_last_email', trimmedEmail.toLowerCase()).catch(() => {});
     } catch (e: any) {
       setErr(e.message);
     } finally {

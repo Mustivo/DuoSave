@@ -40,7 +40,7 @@ app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
       else if (field === 'email') userMsg = 'Please enter a valid email address.';
       else if (field === 'name') userMsg = 'Please enter a valid name (1-40 characters).';
       else if (field === 'code') userMsg = 'Please enter a valid invite code.';
-      else if (field === 'password') userMsg = 'Please provide a valid password.';
+      else if (field === 'password') userMsg = issue.message?.includes('at least') ? 'Password must be at least 6 characters.' : (issue.message || 'Please provide a valid password.');
       else userMsg = issue.message || 'Invalid input provided.';
     }
     return res.status(400).json({ error: userMsg });
