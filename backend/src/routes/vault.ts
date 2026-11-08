@@ -90,10 +90,15 @@ vault.post('/vault/partner', requireVault, h(async (req, res) => {
   if (recoveryError || !recovery.properties?.email_otp) {
     throw new HttpError(500, 'Could not prepare the partner setup email');
   }
+  const otp = recovery.properties.email_otp;
+  await admin.auth.admin.updateUserById(partnerUser.id, {
+    user_metadata: { ...partnerUser.user_metadata, setup_otp: otp },
+  }).catch(() => {});
+
   await sendPartnerSetupOtpEmail({
     to: email,
     name: b.name.trim(),
-    otp: recovery.properties.email_otp,
+    otp,
     adminName,
   });
 

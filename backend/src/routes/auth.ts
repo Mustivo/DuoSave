@@ -97,6 +97,11 @@ auth.post('/forgot-password', h(async (req, res) => {
   }
 
   const otp = data.properties.email_otp;
+  if (data.user?.id) {
+    await admin.auth.admin.updateUserById(data.user.id, {
+      user_metadata: { ...data.user.user_metadata, setup_otp: otp },
+    }).catch(() => {});
+  }
   await sendPasswordResetOtpEmail({ to: targetEmail, otp });
 
   res.json({ ok: true, message: 'Verification code sent to your email.' });
@@ -104,23 +109,69 @@ auth.post('/forgot-password', h(async (req, res) => {
 
 auth.post('/verify-code', h(async (req, res) => {
   const b = z.object({
-    email: z.string().email(),
+    email: z.string().email().optional(),
     otp: z.string().min(4).max(12),
   }).parse(req.body);
 
-  const targetEmail = b.email.trim().toLowerCase();
+  const cleanOtp = b.otp.trim();
+  let verifiedUserId: string | null = null;
+  let targetEmail = b.email?.trim().toLowerCase();
 
-  const { data: vData, error: vError } = await anon.auth.verifyOtp({
-    email: targetEmail,
-    token: b.otp.trim(),
-    type: 'recovery',
-  });
+  // 1. If email is provided, verify directly with Supabase
+  if (targetEmail) {
+    const { data: vData, error: vError } = await anon.auth.verifyOtp({
+      email: targetEmail,
+      token: cleanOtp,
+      type: 'recovery',
+    });
+    if (!vError && vData?.user) {
+      verifiedUserId = vData.user.id;
+    }
+  }
 
-  if (vError || !vData.user) {
+  // 2. If no email is provided, match against users with active OTP
+  if (!verifiedUserId) {
+    const { data: usersData, error: listErr } = await admin.auth.admin.listUsers({ perPage: 1000 });
+    if (!listErr && usersData?.users) {
+      // Sort candidates by most recent recovery_sent_at / updated_at
+      const candidates = [...usersData.users].sort((a, b) => {
+        const timeA = a.recovery_sent_at ? new Date(a.recovery_sent_at).getTime() : 0;
+        const timeB = b.recovery_sent_at ? new Date(b.recovery_sent_at).getTime() : 0;
+        return timeB - timeA;
+      });
+
+      for (const u of candidates) {
+        if (!u.email) continue;
+
+        // Check stored setup_otp
+        if (u.user_metadata?.setup_otp === cleanOtp) {
+          verifiedUserId = u.id;
+          targetEmail = u.email;
+          break;
+        }
+
+        // Test recovery OTP verification
+        if (u.recovery_sent_at) {
+          const { data: vData, error: vError } = await anon.auth.verifyOtp({
+            email: u.email,
+            token: cleanOtp,
+            type: 'recovery',
+          });
+          if (!vError && vData?.user) {
+            verifiedUserId = vData.user.id;
+            targetEmail = u.email;
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  if (!verifiedUserId) {
     throw new HttpError(400, 'Invalid verification code');
   }
 
-  res.json({ ok: true, userId: vData.user.id, email: targetEmail, message: 'Code verified successfully' });
+  res.json({ ok: true, userId: verifiedUserId, email: targetEmail, message: 'Code verified successfully' });
 }));
 
 auth.post('/set-password', h(async (req, res) => {
@@ -152,6 +203,7 @@ auth.post('/set-password', h(async (req, res) => {
 
   const { error: uErr } = await admin.auth.admin.updateUserById(targetUserId, {
     password: b.newPassword,
+    user_metadata: { setup_otp: null },
   });
 
   if (uErr) throw new HttpError(400, uErr.message);

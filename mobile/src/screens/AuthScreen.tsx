@@ -60,16 +60,7 @@ export default function AuthScreen() {
   };
 
   const submitVerifyCode = async () => {
-    const trimmedEmail = email.trim();
     const trimmedOtp = otp.trim();
-    if (!trimmedEmail) {
-      setErr('Enter your email');
-      return;
-    }
-    if (!trimmedEmail.includes('@') || !trimmedEmail.includes('.')) {
-      setErr('Enter a valid email');
-      return;
-    }
     if (!trimmedOtp) {
       setErr('Enter verification code');
       return;
@@ -81,11 +72,12 @@ export default function AuthScreen() {
 
     setBusy(true); setErr(null); setMsg(null);
     try {
-      const res = await api.post<{ ok: boolean; userId: string }>('/auth/verify-code', {
-        email: trimmedEmail.toLowerCase(),
+      const res = await api.post<{ ok: boolean; userId: string; email?: string }>('/auth/verify-code', {
+        email: email.trim() ? email.trim().toLowerCase() : undefined,
         otp: trimmedOtp,
       });
       setVerifiedUserId(res.userId);
+      if (res.email) setEmail(res.email);
       setMode('set-password');
       setMsg('Code confirmed. Enter your new password.');
     } catch (e: any) {
@@ -189,7 +181,7 @@ export default function AuthScreen() {
             <T muted style={{ textAlign: 'center', maxWidth: 300 }}>
               {mode === 'login' && 'Sign in to access your shared savings vault.'}
               {mode === 'forgot-choice' && 'Choose an option to verify your code or reset your password.'}
-              {mode === 'verify-code' && 'Step 1: Enter your email and verification code.'}
+              {mode === 'verify-code' && 'Enter the verification code received when your partner linked you.'}
               {mode === 'set-password' && 'Step 2: Create your new password.'}
               {mode === 'request-code' && 'Enter your email to receive a password reset code.'}
             </T>
@@ -259,7 +251,7 @@ export default function AuthScreen() {
                   </View>
                   <View style={{ flex: 1 }}>
                     <T weight="700" size={16} color={c.accent}>1. Use Verification Code</T>
-                    <T size={12} muted>For newly linked partners with an invite code from the admin, or if you already have an OTP.</T>
+                    <T size={12} muted>Enter the verification code you received when your partner linked you.</T>
                   </View>
                 </View>
                 <View style={{ marginTop: 6 }}>
@@ -309,21 +301,12 @@ export default function AuthScreen() {
             </View>
           )}
 
-          {/* MODE 3: STEP 1 - ENTER & VERIFY CODE ONLY */}
+          {/* MODE 3: STEP 1 - ENTER VERIFICATION CODE ONLY */}
           {mode === 'verify-code' && (
             <>
               <Input
-                label="Email"
-                placeholder="your-email@example.com"
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
-
-              <Input
-                label="Verification Code (OTP from email)"
-                placeholder="e.g. 123456"
+                label="Verification Code"
+                placeholder="Enter 6-digit code from email"
                 value={otp}
                 onChangeText={setOtp}
                 keyboardType="number-pad"
@@ -362,7 +345,7 @@ export default function AuthScreen() {
                   <T size={13} weight="700" color={c.accent}>Verification Confirmed</T>
                 </View>
                 <T size={12}>
-                  Code successfully verified for {email}. Please choose your new password.
+                  Code successfully verified{email ? ` for ${email}` : ''}. Please choose your new password.
                 </T>
               </View>
 
