@@ -155,6 +155,10 @@ const translations = {
     // Analytics Screen
     analytics_title: 'Analytics',
     saved_per_month: 'Savings Growth (Last 6 Months)',
+    savings_growth_weekly: 'Weekly Savings Breakdown',
+    by_week: 'Weekly',
+    by_month: 'Monthly',
+    selected_period: 'Selected Period',
     who_saved_what: 'Partner Contribution Breakdown',
     money_out_on_loan: 'Money Out on Loan',
     owes_label: '{name} owes',
@@ -380,6 +384,10 @@ const translations = {
     // Analytics Screen
     analytics_title: 'Isesengura',
     saved_per_month: 'Ubwiyongere bw\'Ubwizigame (Amezi 6 Ashize)',
+    savings_growth_weekly: 'Uko Mwazigamye ku Cyumweru',
+    by_week: 'Buri Cyumweru',
+    by_month: 'Buri Kwezi',
+    selected_period: 'Igihe Wahisemo',
     who_saved_what: 'Imisanzu y\'Abafatanyabikorwa',
     money_out_on_loan: 'Amafaranga Ari mu Nguzanyo',
     owes_label: '{name} arimo',

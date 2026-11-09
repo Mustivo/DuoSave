@@ -522,8 +522,8 @@ vault.get('/vault/summary', requireVault, h(async (req, res) => {
     .reduce((s, c) => s + Number(c.amount), 0);
 
   const members = (profiles ?? []).map((p) => {
-    // Only personal contributions are assigned to individual members
-    const mine = (contribs ?? []).filter((c) => c.user_id === p.id && c.note !== 'Account savings');
+    // Member contributions includes all deposits made by the member
+    const mine = (contribs ?? []).filter((c) => c.user_id === p.id);
     const owed = (loans ?? []).filter((l) => l.borrower_id === p.id && l.status === 'active')
       .reduce((s, l) => s + Number(l.amount) - Number(l.repaid), 0);
     return {

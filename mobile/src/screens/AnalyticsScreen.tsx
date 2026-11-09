@@ -1,5 +1,5 @@
-import React from 'react';
-import { View } from 'react-native';
+import React, { useState } from 'react';
+import { Pressable, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '../api';
 import { useAuth } from '../auth';
@@ -11,7 +11,7 @@ import { Card, ErrorText, ProgressBar, Screen, T, money, useLoad } from '../ui';
 function formatCompact(val: number): string {
   if (val === 0) return '0';
   if (val >= 1000000) return `${(val / 1000000).toFixed(1)}M`;
-  if (val >= 1000) return `${Math.round(val / 1000)}k`;
+  if (val >= 1000) return `${(val / 1000).toFixed(val % 1000 === 0 ? 0 : 1)}k`;
   return `${val}`;
 }
 
@@ -19,6 +19,8 @@ export default function AnalyticsScreen() {
   const { c } = useTheme();
   const { t } = useLanguage();
   const { me } = useAuth();
+  const [timeframe, setTimeframe] = useState<'week' | 'month'>('week');
+  const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
 
   const { data, loading, error, reload } = useLoad(async () => {
     const [summary, list] = await Promise.all([
@@ -32,97 +34,188 @@ export default function AnalyticsScreen() {
   const partnerColors = [c.accent, c.blue, '#9b5de5', '#f15bb5'];
   const members = data?.summary.members ?? [];
   const vault = data?.summary.vault;
+  const rawList = data?.list ?? [];
 
-  // Generate last 6 months
   const now = new Date();
   const currentMonthIdx = now.getMonth();
   const currentYear = now.getFullYear();
 
-  const months = Array.from({ length: 6 }, (_, i) => {
+  // 1. MONTHLY BUCKETS (Last 6 Months)
+  const monthlyBuckets = Array.from({ length: 6 }, (_, i) => {
     const d = new Date();
     d.setDate(1);
     d.setMonth(d.getMonth() - (5 - i));
     const isCurrent = d.getMonth() === currentMonthIdx && d.getFullYear() === currentYear;
-    return {
-      key: `${d.getFullYear()}-${d.getMonth()}`,
-      label: d.toLocaleString('en-US', { month: 'short' }),
-      isCurrent,
-    };
-  });
+    const key = `${d.getFullYear()}-${d.getMonth()}`;
+    const label = d.toLocaleString('en-US', { month: 'short' });
+    const fullTitle = d.toLocaleString('en-US', { month: 'long', year: 'numeric' });
 
-  // Calculate per member per month
-  const perMonthData = months.map((mo) => {
-    const memberAmounts = members.map((m) => {
-      const sum = (data?.list ?? [])
-        .filter((x) => {
-          if (x.user_id !== m.id || x.note === 'Account savings') return false;
-          const d = new Date(x.created_at);
-          return `${d.getFullYear()}-${d.getMonth()}` === mo.key;
-        })
-        .reduce((acc, x) => acc + Number(x.amount), 0);
-      return sum;
+    // Sum for this month
+    const listInMonth = rawList.filter((x) => {
+      const xDate = new Date(x.created_at);
+      return `${xDate.getFullYear()}-${xDate.getMonth()}` === key;
     });
-    const totalMonth = memberAmounts.reduce((a, b) => a + b, 0);
+
+    const memberAmounts = members.map((m) =>
+      listInMonth
+        .filter((x) => x.user_id === m.id)
+        .reduce((sum, x) => sum + Number(x.amount), 0)
+    );
+
+    const totalMonth = listInMonth.reduce((sum, x) => sum + Number(x.amount), 0);
+
     return {
-      month: mo,
+      key,
+      label,
+      fullTitle,
+      isCurrent,
       memberAmounts,
-      totalMonth,
+      total: totalMonth,
     };
   });
 
-  const maxMonthVal = Math.max(1, ...perMonthData.map((p) => p.totalMonth));
-  const totalSavedAllTime = data?.summary.totalDeposited ?? members.reduce((s, m) => s + m.total, 0);
-  const thisMonthTotal = perMonthData[perMonthData.length - 1]?.totalMonth ?? 0;
+  // 2. WEEKLY BUCKETS (Last 5 Weeks)
+  const weeklyBuckets = Array.from({ length: 5 }, (_, i) => {
+    // End of week i (0 is oldest, 4 is current week)
+    const weeksAgo = 4 - i;
+    const end = new Date(now);
+    end.setDate(now.getDate() - (weeksAgo * 7));
+    end.setHours(23, 59, 59, 999);
+
+    const start = new Date(end);
+    start.setDate(end.getDate() - 6);
+    start.setHours(0, 0, 0, 0);
+
+    const isCurrent = weeksAgo === 0;
+    const label = isCurrent ? 'This Wk' : `Wk ${i + 1}`;
+    const dateRangeStr = `${start.getDate()} ${start.toLocaleString('en-US', { month: 'short' })} - ${end.getDate()} ${end.toLocaleString('en-US', { month: 'short' })}`;
+
+    const listInWeek = rawList.filter((x) => {
+      const xDate = new Date(x.created_at);
+      return xDate >= start && xDate <= end;
+    });
+
+    const memberAmounts = members.map((m) =>
+      listInWeek
+        .filter((x) => x.user_id === m.id)
+        .reduce((sum, x) => sum + Number(x.amount), 0)
+    );
+
+    const totalWeek = listInWeek.reduce((sum, x) => sum + Number(x.amount), 0);
+
+    return {
+      key: `week-${i}`,
+      label,
+      fullTitle: isCurrent ? `This Week (${dateRangeStr})` : `Week ${i + 1} (${dateRangeStr})`,
+      isCurrent,
+      memberAmounts,
+      total: totalWeek,
+    };
+  });
+
+  const activeBuckets = timeframe === 'week' ? weeklyBuckets : monthlyBuckets;
+  const maxVal = Math.max(1, ...activeBuckets.map((b) => b.total));
+  const activeSelectedIdx = selectedIdx !== null && selectedIdx < activeBuckets.length ? selectedIdx : activeBuckets.length - 1;
+  const selectedBucket = activeBuckets[activeSelectedIdx];
+
+  // Overview metrics
+  const totalVaultSaved = data?.summary.totalDeposited ?? rawList.reduce((s, x) => s + Number(x.amount), 0);
+  const thisMonthData = monthlyBuckets[monthlyBuckets.length - 1];
+  const thisMonthTotal = thisMonthData?.total ?? 0;
   const monthlyTarget = vault?.monthly_target ?? 0;
   const targetPct = monthlyTarget > 0 ? Math.min(100, Math.round((thisMonthTotal / monthlyTarget) * 100)) : 100;
-  const sixMonthsTotal = perMonthData.reduce((s, p) => s + p.totalMonth, 0);
-  const monthlyAvg = Math.round(sixMonthsTotal / 6);
-  const availableBal = data?.summary.available ?? 0;
+  const activePeriodTotal = activeBuckets.reduce((s, b) => s + b.total, 0);
+  const activePeriodAvg = Math.round(activePeriodTotal / activeBuckets.length);
+  const availableBal = data?.summary.available ?? totalVaultSaved;
   const loanedOut = data?.summary.loanedOut ?? 0;
 
   return (
     <Screen title={t('analytics_title')} onRefresh={reload} refreshing={loading}>
       <ErrorText msg={error} />
 
-      {/* Top Quick Stats Grid */}
+      {/* Top Key Metrics Cards */}
       <View style={{ flexDirection: 'row', gap: 10 }}>
-        <Card style={{ flex: 1, padding: 12, gap: 4 }}>
+        <Card style={{ flex: 1, padding: 14, gap: 4 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Ionicons name="wallet-outline" size={16} color={c.accent} />
-            <T size={11} muted numberOfLines={1}>{t('total_vault_savings')}</T>
+            <Ionicons name="wallet-outline" size={17} color={c.accent} />
+            <T size={12} muted numberOfLines={1}>{t('total_vault_savings')}</T>
           </View>
-          <T weight="800" size={18} color={c.accent}>{money(totalSavedAllTime, cur)}</T>
-          <T size={10} muted>{money(availableBal, cur)} available</T>
+          <T weight="800" size={20} color={c.accent}>{money(totalVaultSaved, cur)}</T>
+          <T size={11} muted>{money(availableBal, cur)} available</T>
         </Card>
 
-        <Card style={{ flex: 1, padding: 12, gap: 4 }}>
+        <Card style={{ flex: 1, padding: 14, gap: 4 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Ionicons name="trending-up-outline" size={16} color={c.blue} />
-            <T size={11} muted numberOfLines={1}>{t('this_month_saved')}</T>
+            <Ionicons name="trending-up-outline" size={17} color={c.blue} />
+            <T size={12} muted numberOfLines={1}>{t('this_month_saved')}</T>
           </View>
-          <T weight="800" size={18} color={c.text}>{money(thisMonthTotal, cur)}</T>
-          <T size={10} color={targetPct >= 100 ? c.accent : c.warn} weight="600">
-            {monthlyTarget > 0 ? `${targetPct}% of goal` : 'Active'}
+          <T weight="800" size={20} color={c.text}>{money(thisMonthTotal, cur)}</T>
+          <T size={11} color={targetPct >= 100 ? c.accent : c.warn} weight="700">
+            {monthlyTarget > 0 ? `${targetPct}% of monthly goal` : 'Active'}
           </T>
         </Card>
       </View>
 
-      {/* Main Visible Interactive Bar Chart */}
-      <Card style={{ padding: 16 }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+      {/* Main Chart Card */}
+      <Card style={{ padding: 18 }}>
+        {/* Header: Title + Timeframe Segmented Toggle */}
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
           <View style={{ gap: 2 }}>
-            <T weight="800" size={17}>{t('saved_per_month')}</T>
-            <T size={12} muted>6-Month savings trends for both partners</T>
+            <T weight="800" size={17}>
+              {timeframe === 'week' ? t('savings_growth_weekly') : t('saved_per_month')}
+            </T>
+            <T size={12} muted>
+              {timeframe === 'week' ? 'Last 5 weeks breakdown' : '6-Month savings trend'}
+            </T>
           </View>
-          <View style={{ alignItems: 'flex-end', backgroundColor: c.accent + '15', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
-            <T size={10} color={c.accent} weight="700">6-Mo Total</T>
-            <T size={13} weight="800" color={c.accent}>{money(sixMonthsTotal, cur)}</T>
+
+          {/* Timeframe Pill Switcher */}
+          <View style={{
+            flexDirection: 'row',
+            backgroundColor: c.cardAlt,
+            borderRadius: 10,
+            padding: 3,
+            borderWidth: 1,
+            borderColor: c.border,
+          }}>
+            <Pressable
+              onPress={() => { setTimeframe('week'); setSelectedIdx(null); }}
+              style={{
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+                borderRadius: 8,
+                backgroundColor: timeframe === 'week' ? c.accent : 'transparent',
+              }}>
+              <T size={12} weight="700" color={timeframe === 'week' ? c.onAccent : c.muted}>
+                {t('by_week')}
+              </T>
+            </Pressable>
+            <Pressable
+              onPress={() => { setTimeframe('month'); setSelectedIdx(null); }}
+              style={{
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+                borderRadius: 8,
+                backgroundColor: timeframe === 'month' ? c.accent : 'transparent',
+              }}>
+              <T size={12} weight="700" color={timeframe === 'month' ? c.onAccent : c.muted}>
+                {t('by_month')}
+              </T>
+            </Pressable>
           </View>
         </View>
 
         {/* Legend */}
         {members.length > 0 && (
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 16, paddingBottom: 8, borderBottomWidth: 1, borderColor: c.border + '60' }}>
+          <View style={{
+            flexDirection: 'row',
+            flexWrap: 'wrap',
+            gap: 14,
+            marginBottom: 16,
+            paddingBottom: 10,
+            borderBottomWidth: 1,
+            borderColor: c.border + '60',
+          }}>
             {members.map((m, idx) => (
               <View key={m.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                 <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: partnerColors[idx % partnerColors.length] }} />
@@ -134,78 +227,155 @@ export default function AnalyticsScreen() {
           </View>
         )}
 
-        {/* Graph Pillars Area */}
-        <View style={{ height: 170, flexDirection: 'row', alignItems: 'flex-end', gap: 8, paddingTop: 16 }}>
-          {perMonthData.map((p, i) => {
-            const isCurrent = p.month.isCurrent;
-            const monthTotal = p.totalMonth;
-            const barHeightPct = maxMonthVal > 0 ? (monthTotal / maxMonthVal) : 0;
-            const pillarFilledHeight = Math.max(monthTotal > 0 ? 12 : 0, barHeightPct * 115);
+        {/* Chart Canvas with Horizontal Grid Lines */}
+        <View style={{ height: 180, justifyContent: 'flex-end', paddingTop: 12 }}>
+          {/* Subtle Horizontal Grid Guidelines */}
+          <View style={{ position: 'absolute', top: 20, left: 0, right: 0, bottom: 35, justifyContent: 'space-between' }}>
+            <View style={{ height: 1, backgroundColor: c.border + '40', width: '100%' }} />
+            <View style={{ height: 1, backgroundColor: c.border + '30', width: '100%' }} />
+            <View style={{ height: 1, backgroundColor: c.border + '60', width: '100%' }} />
+          </View>
 
-            return (
-              <View key={p.month.key} style={{ flex: 1, alignItems: 'center', height: '100%', justifyContent: 'flex-end' }}>
-                {/* Value on top of bar */}
-                <T size={10} weight="700" color={monthTotal > 0 ? c.text : c.muted} style={{ marginBottom: 4 }}>
-                  {formatCompact(monthTotal)}
-                </T>
+          {/* Bar Columns Container */}
+          <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 10, height: 145 }}>
+            {activeBuckets.map((bucket, idx) => {
+              const isSelected = idx === activeSelectedIdx;
+              const hasData = bucket.total > 0;
+              const fillRatio = maxVal > 0 ? (bucket.total / maxVal) : 0;
+              const barHeight = Math.max(hasData ? 18 : 4, fillRatio * 105);
 
-                {/* Visible Pillar Container */}
-                <View style={{
-                  width: '100%',
-                  height: 120,
-                  backgroundColor: isCurrent ? c.accent + '12' : c.cardAlt,
-                  borderRadius: 8,
-                  borderWidth: 1,
-                  borderColor: isCurrent ? c.accent + '60' : c.border,
-                  justifyContent: 'flex-end',
-                  overflow: 'hidden',
-                  padding: 2,
-                }}>
-                  {monthTotal === 0 ? (
-                    // Subtle indicator when empty
-                    <View style={{ alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-                      <View style={{ width: 10, height: 3, borderRadius: 1.5, backgroundColor: c.border }} />
-                    </View>
-                  ) : (
-                    // Stacked partner contributions inside the pillar
-                    <View style={{ width: '100%', height: pillarFilledHeight, justifyContent: 'flex-end', borderRadius: 6, overflow: 'hidden' }}>
-                      {p.memberAmounts.map((amt, mIdx) => {
-                        if (amt === 0) return null;
-                        const partHeight = (amt / monthTotal) * pillarFilledHeight;
-                        return (
-                          <View
-                            key={mIdx}
-                            style={{
-                              width: '100%',
-                              height: partHeight,
-                              backgroundColor: partnerColors[mIdx % partnerColors.length],
-                            }}
-                          />
-                        );
-                      })}
-                    </View>
-                  )}
-                </View>
+              return (
+                <Pressable
+                  key={bucket.key}
+                  onPress={() => setSelectedIdx(idx)}
+                  style={{ flex: 1, alignItems: 'center', height: '100%', justifyContent: 'flex-end' }}>
+                  
+                  {/* Floating Compact Value Badge on top */}
+                  <View style={{
+                    minHeight: 18,
+                    paddingHorizontal: 5,
+                    paddingVertical: 1,
+                    borderRadius: 5,
+                    backgroundColor: isSelected ? c.accent : hasData ? c.cardAlt : 'transparent',
+                    marginBottom: 6,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}>
+                    <T size={10} weight="800" color={isSelected ? c.onAccent : hasData ? c.text : c.muted}>
+                      {formatCompact(bucket.total)}
+                    </T>
+                  </View>
 
-                {/* Month Label with Current Badge */}
-                <View style={{ alignItems: 'center', marginTop: 6 }}>
-                  <T size={11} weight={isCurrent ? '800' : '600'} color={isCurrent ? c.accent : c.muted}>
-                    {p.month.label}
-                  </T>
-                  {isCurrent && (
-                    <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: c.accent, marginTop: 2 }} />
-                  )}
-                </View>
-              </View>
-            );
-          })}
+                  {/* Slender Sleek Pillar Bar */}
+                  <View style={{
+                    width: '100%',
+                    maxWidth: 38,
+                    height: 110,
+                    alignItems: 'center',
+                    justifyContent: 'flex-end',
+                  }}>
+                    {hasData ? (
+                      // Stacked filled rounded bar with vibrant colors
+                      <View style={{
+                        width: '100%',
+                        height: barHeight,
+                        borderRadius: 8,
+                        overflow: 'hidden',
+                        borderWidth: isSelected ? 2 : 0,
+                        borderColor: '#FFFFFF',
+                        shadowColor: c.accent,
+                        shadowOffset: { width: 0, height: 4 },
+                        shadowOpacity: 0.35,
+                        shadowRadius: 8,
+                        elevation: 4,
+                      }}>
+                        {bucket.memberAmounts.map((amt, mIdx) => {
+                          if (amt === 0) return null;
+                          const partHeight = (amt / bucket.total) * barHeight;
+                          return (
+                            <View
+                              key={mIdx}
+                              style={{
+                                width: '100%',
+                                height: partHeight,
+                                backgroundColor: partnerColors[mIdx % partnerColors.length],
+                              }}
+                            />
+                          );
+                        })}
+                      </View>
+                    ) : (
+                      // Sleek minimalist track line (not an ugly dark box!)
+                      <View style={{
+                        width: 4,
+                        height: '100%',
+                        backgroundColor: c.border + '50',
+                        borderRadius: 2,
+                        justifyContent: 'flex-end',
+                      }}>
+                        <View style={{ width: 14, height: 3, borderRadius: 1.5, backgroundColor: c.border, marginLeft: -5 }} />
+                      </View>
+                    )}
+                  </View>
+
+                  {/* Period Label Under Bar */}
+                  <View style={{ alignItems: 'center', marginTop: 8 }}>
+                    <T size={11} weight={bucket.isCurrent || isSelected ? '800' : '600'} color={isSelected ? c.accent : bucket.isCurrent ? c.text : c.muted}>
+                      {bucket.label}
+                    </T>
+                    {bucket.isCurrent && (
+                      <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: c.accent, marginTop: 3 }} />
+                    )}
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
         </View>
 
+        {/* Selected Period Details Card */}
+        {selectedBucket && (
+          <View style={{
+            marginTop: 18,
+            padding: 12,
+            borderRadius: 12,
+            backgroundColor: c.cardAlt,
+            borderWidth: 1,
+            borderColor: selectedBucket.isCurrent ? c.accent + '40' : c.border,
+            gap: 6,
+          }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Ionicons name="calendar-outline" size={15} color={c.accent} />
+                <T size={12} weight="700" color={c.text}>{selectedBucket.fullTitle}</T>
+              </View>
+              <T size={15} weight="800" color={selectedBucket.total > 0 ? c.accent : c.muted}>
+                {money(selectedBucket.total, cur)}
+              </T>
+            </View>
+
+            {selectedBucket.total > 0 && members.length > 0 && (
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 4, paddingTop: 6, borderTopWidth: 1, borderColor: c.border + '40' }}>
+                {members.map((m, idx) => {
+                  const mAmount = selectedBucket.memberAmounts[idx] ?? 0;
+                  const pct = selectedBucket.total > 0 ? Math.round((mAmount / selectedBucket.total) * 100) : 0;
+                  return (
+                    <View key={m.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: partnerColors[idx % partnerColors.length] }} />
+                      <T size={12} muted>{m.name}: <T weight="700" color={c.text}>{money(mAmount, cur)}</T> ({pct}%)</T>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+          </View>
+        )}
+
         {/* Footer Metrics Row */}
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 16, paddingTop: 12, borderTopWidth: 1, borderColor: c.border + '60' }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderColor: c.border + '60' }}>
           <View style={{ gap: 2 }}>
             <T size={11} muted>{t('monthly_avg')}</T>
-            <T size={14} weight="700">{money(monthlyAvg, cur)} / mo</T>
+            <T size={14} weight="700">{money(activePeriodAvg, cur)} / {timeframe === 'week' ? 'wk' : 'mo'}</T>
           </View>
           {monthlyTarget > 0 && (
             <View style={{ alignItems: 'flex-end', gap: 2 }}>
@@ -218,7 +388,7 @@ export default function AnalyticsScreen() {
         </View>
       </Card>
 
-      {/* Partner Breakdown Card */}
+      {/* Partner Breakdown Card ("Who Saved What") */}
       <Card>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <T weight="700" size={16}>{t('who_saved_what')}</T>
@@ -229,7 +399,7 @@ export default function AnalyticsScreen() {
 
         <View style={{ gap: 10, marginTop: 4 }}>
           {members.map((m, i) => {
-            const pct = totalSavedAllTime > 0 ? Math.round((m.total / totalSavedAllTime) * 100) : 0;
+            const pct = totalVaultSaved > 0 ? Math.round((m.total / totalVaultSaved) * 100) : 0;
             const pColor = partnerColors[i % partnerColors.length];
             const isMe = m.id === me?.profile.id;
 
@@ -248,16 +418,16 @@ export default function AnalyticsScreen() {
                 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                   <View style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 18,
+                    width: 38,
+                    height: 38,
+                    borderRadius: 19,
                     backgroundColor: pColor + '20',
                     borderWidth: 1.5,
                     borderColor: pColor,
                     justifyContent: 'center',
                     alignItems: 'center',
                   }}>
-                    <T weight="800" color={pColor} size={14}>{m.name.charAt(0).toUpperCase()}</T>
+                    <T weight="800" color={pColor} size={15}>{m.name.charAt(0).toUpperCase()}</T>
                   </View>
                   <View style={{ gap: 2 }}>
                     <T weight="700" size={14}>{isMe ? `${m.name} (${t('you_label')})` : m.name}</T>
@@ -267,7 +437,7 @@ export default function AnalyticsScreen() {
 
                 <View style={{ alignItems: 'flex-end', gap: 2 }}>
                   <T weight="800" size={15}>{money(m.total, cur)}</T>
-                  <View style={{ backgroundColor: pColor + '20', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 6 }}>
+                  <View style={{ backgroundColor: pColor + '20', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
                     <T size={11} weight="700" color={pColor}>{pct}%</T>
                   </View>
                 </View>
