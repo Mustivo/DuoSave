@@ -121,7 +121,7 @@ export default function SavingsRulesScreen() {
   const storageKey = `duosave_rules_${me?.vault?.id ?? 'default'}`;
 
   // Only master admin (stevenmwizerwa1@gmail.com) has permission to add, edit, or delete rules
-  const isVaultOwner = (me?.profile?.email?.toLowerCase() === 'stevenmwizerwa1@gmail.com') || !!me?.isAdmin;
+  const isVaultOwner = me?.profile?.email?.toLowerCase() === 'stevenmwizerwa1@gmail.com';
   const adminName = isVaultOwner ? 'You (Master Admin)' : 'stevenmwizerwa1@gmail.com';
 
   const defaultRules = lang === 'rw' ? DEFAULT_RULES_RW : DEFAULT_RULES_EN;

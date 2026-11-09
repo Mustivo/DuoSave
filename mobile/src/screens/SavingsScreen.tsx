@@ -58,7 +58,7 @@ export default function SavingsScreen() {
     message: '',
   });
 
-  const isVaultOwner = (me?.profile?.email?.toLowerCase() === 'stevenmwizerwa1@gmail.com') || !!me?.isAdmin;
+  const isVaultOwner = me?.profile?.email?.toLowerCase() === 'stevenmwizerwa1@gmail.com';
 
   const save = async () => {
     const n = parseFloat(amount.replace(',', '.'));

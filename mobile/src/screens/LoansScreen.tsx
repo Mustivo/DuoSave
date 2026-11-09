@@ -82,7 +82,7 @@ export default function LoansScreen() {
   }, []);
 
   const cur = data?.summary.vault.currency ?? 'RWF';
-  const isVaultOwner = (me?.profile.email?.toLowerCase() === 'stevenmwizerwa1@gmail.com') || !me?.isAdmin;
+  const isVaultOwner = me?.profile.email?.toLowerCase() === 'stevenmwizerwa1@gmail.com';
   const nameOf = (id: string, fallback?: string) =>
     data?.summary.members.find((m) => m.id === id)?.name ?? fallback ?? 'Partner';
 

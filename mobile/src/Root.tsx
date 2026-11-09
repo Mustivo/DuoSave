@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -88,12 +88,56 @@ export default function Root() {
     return () => clearTimeout(timer);
   }, [activeBanner]);
 
-  if (!ready) return (
-    <View style={{ flex: 1, backgroundColor: c.bg, justifyContent: 'center' }}>
-      {bar}
-      <ActivityIndicator color={c.accent} />
-    </View>
-  );
+  if (!ready) {
+    return (
+      <View style={{ flex: 1, backgroundColor: c.bg, justifyContent: 'space-between', alignItems: 'center', paddingVertical: 48, paddingHorizontal: 24 }}>
+        {bar}
+        <View />
+        <View style={{ alignItems: 'center', gap: 18 }}>
+          {/* Centered DuoSave Logo with glowing border */}
+          <View style={{
+            width: 108,
+            height: 108,
+            borderRadius: 26,
+            backgroundColor: c.card,
+            borderWidth: 2,
+            borderColor: c.accent + '66',
+            justifyContent: 'center',
+            alignItems: 'center',
+            shadowColor: c.accent,
+            shadowOffset: { width: 0, height: 8 },
+            shadowOpacity: 0.35,
+            shadowRadius: 18,
+            elevation: 12,
+          }}>
+            <Image
+              source={require('../assets/icon.png')}
+              style={{ width: 88, height: 88, borderRadius: 20 }}
+              resizeMode="contain"
+            />
+          </View>
+
+          <View style={{ alignItems: 'center', gap: 6 }}>
+            <T size={34} weight="800" style={{ letterSpacing: 0.5 }}>DuoSave</T>
+            <T size={14} muted style={{ letterSpacing: 0.2 }}>
+              Shared Savings Vault
+            </T>
+          </View>
+
+          <ActivityIndicator size="small" color={c.accent} style={{ marginTop: 12 }} />
+        </View>
+
+        {/* Footer Security Badge */}
+        <View style={{ alignItems: 'center', gap: 4 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Ionicons name="shield-checkmark" size={14} color={c.accent} />
+            <T size={12} weight="600" color={c.accent}>End-to-End Encrypted</T>
+          </View>
+          <T size={11} muted>v1.0.0</T>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <NavigationContainer theme={navTheme}>

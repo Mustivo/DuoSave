@@ -70,7 +70,7 @@ export default function AccountScreen() {
     message: '',
   });
 
-  const isMasterAdmin = (me?.profile?.email?.toLowerCase() === MASTER_ADMIN_EMAIL) || !!me?.isAdmin;
+  const isMasterAdmin = me?.profile?.email?.toLowerCase() === MASTER_ADMIN_EMAIL;
 
   const loadDirectory = async () => {
     if (!isMasterAdmin) return;
@@ -162,6 +162,16 @@ export default function AccountScreen() {
   };
 
   const handleLinkFromDirectory = (user: SystemUser) => {
+    if (user.isLinkedToAnyVault) {
+      setStatusConfig({
+        visible: true,
+        title: 'Already Linked',
+        message: `${user.name} is already linked to another account in the system and cannot be linked.`,
+        type: 'error',
+      });
+      return;
+    }
+
     setConfirmConfig({
       visible: true,
       title: 'Link Partner to Vault?',
@@ -433,8 +443,19 @@ export default function AccountScreen() {
                           opacity: pressed || pBusy ? 0.6 : 1,
                         })}>
                         <Ionicons name="trash-outline" size={13} color={c.danger} />
-                        <T size={12} weight="700" color={c.danger}>Delete Partner</T>
+                        <T size={12} weight="700" color={c.danger}>{t('delete_partner')}</T>
                       </Pressable>
+                    ) : user.isLinkedToAnyVault ? (
+                      <View style={{
+                        paddingHorizontal: 10,
+                        paddingVertical: 6,
+                        borderRadius: 8,
+                        backgroundColor: c.card,
+                        borderWidth: 1,
+                        borderColor: c.border,
+                      }}>
+                        <T size={11} weight="600" muted>{t('already_linked')}</T>
+                      </View>
                     ) : (
                       <Pressable
                         onPress={() => handleLinkFromDirectory(user)}
@@ -447,7 +468,7 @@ export default function AccountScreen() {
                           borderRadius: 8,
                           opacity: pressed || pBusy ? 0.6 : 1,
                         })}>
-                        <T size={12} weight="700" color={c.accent}>+ Link to Vault</T>
+                        <T size={12} weight="700" color={c.accent}>{t('link_to_vault')}</T>
                       </Pressable>
                     )}
                   </View>

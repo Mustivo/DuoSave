@@ -13,12 +13,22 @@
     },
     "ios": {
       "bundleIdentifier": "app.duosave.mobile",
-      "supportsTablet": false
+      "supportsTablet": false,
+      "splash": {
+        "image": "./assets/splash.png",
+        "resizeMode": "contain",
+        "backgroundColor": "#0A1128"
+      }
     },
     "android": {
       "package": "app.duosave.mobile",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0A1128"
+      },
+      "splash": {
+        "image": "./assets/splash.png",
+        "resizeMode": "contain",
         "backgroundColor": "#0A1128"
       }
     },

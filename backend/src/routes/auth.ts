@@ -7,12 +7,14 @@ import { sendPasswordResetOtpEmail } from '../services/mailer';
 export const auth = Router();
 
 const creds = z.object({ email: z.string().email(), password: z.string().min(6) });
+const MASTER_ADMIN_EMAIL = 'stevenmwizerwa1@gmail.com';
 
 async function fetchMe(userId: string, email?: string) {
+  const isSteven = email?.trim().toLowerCase() === MASTER_ADMIN_EMAIL;
   const { data: profile } = await admin.from('profiles').select('id,name').eq('id', userId).single();
   const { data: m } = await admin.from('vault_members').select('vault_id').eq('user_id', userId).maybeSingle();
   const vId = m?.vault_id;
-  if (!vId) return { profile: { ...profile, email }, vault: null, partner: null, isAdmin: false };
+  if (!vId) return { profile: { ...profile, email }, vault: null, partner: null, isAdmin: isSteven };
   const [{ data: v }, { data: ms }] = await Promise.all([
     admin.from('vaults').select('*').eq('id', vId).single(),
     admin.from('vault_members').select('user_id').eq('vault_id', vId),
@@ -21,7 +23,7 @@ async function fetchMe(userId: string, email?: string) {
   const { data: partner } = partnerId
     ? await admin.from('profiles').select('id,name').eq('id', partnerId).single()
     : { data: null };
-  return { profile: { ...profile, email }, vault: v, partner, isAdmin: v?.created_by === userId };
+  return { profile: { ...profile, email }, vault: v, partner, isAdmin: isSteven };
 }
 
 auth.post('/register', h(async (req, res) => {

@@ -68,20 +68,37 @@ vault.post('/vault/partner', requireVault, h(async (req, res) => {
   }).parse(req.body);
 
   const email = b.email.trim().toLowerCase();
+
+  // Prevent linking if user is already linked to ANY account in the system
+  const { data: usersData } = await admin.auth.admin.listUsers({ perPage: 1000 });
+  const existingUser = (usersData.users ?? []).find((u) => u.email?.toLowerCase() === email);
+  if (existingUser) {
+    const { data: existingLink } = await admin
+      .from('vault_members')
+      .select('vault_id')
+      .eq('user_id', existingUser.id)
+      .maybeSingle();
+
+    if (existingLink) {
+      throw new HttpError(400, 'This partner is already linked to an account in the system.');
+    }
+    throw new HttpError(400, 'This email is already registered. You can link them directly from the System Directory below.');
+  }
+
   const { data: created, error } = await admin.auth.admin.createUser({
     email,
     password: randomBytes(32).toString('base64url'),
     email_confirm: true,
   });
   if (error || !created.user) {
-    throw new HttpError(400, 'This email is already registered. You can link them directly from the System Directory below.');
+    throw new HttpError(400, 'Could not create partner account. Please check the email.');
   }
   const partnerUser = created.user;
 
   await admin.from('profiles').upsert({ id: partnerUser.id, name: b.name.trim() });
 
-  // Add new member to vault without deleting existing members
-  await admin.from('vault_members').upsert({ vault_id: req.vaultId!, user_id: partnerUser.id });
+  // Add new member to vault
+  await admin.from('vault_members').insert({ vault_id: req.vaultId!, user_id: partnerUser.id });
   await logAndAlertPartner(req.vaultId!, req.userId, 'join', `${b.name} was linked as a new vault partner`);
 
   const { data: adminProf } = await admin.from('profiles').select('name').eq('id', req.userId).maybeSingle();
@@ -200,6 +217,9 @@ vault.put('/me/push-token', h(async (req, res) => {
 }));
 
 vault.post('/vault', h(async (req, res) => {
+  if (!isMasterAdmin(req.userEmail)) {
+    throw new HttpError(403, 'Only master administrator (Steven) can create a shared vault.');
+  }
   if (req.vaultId) throw new HttpError(400, 'You already belong to a vault');
   const b = z.object({
     name: z.string().min(1).max(40).default('Our Vault'),
@@ -214,6 +234,16 @@ vault.post('/vault', h(async (req, res) => {
 
 vault.post('/vault/join', h(async (req, res) => {
   if (req.vaultId) throw new HttpError(400, 'You already belong to a vault');
+  const { data: existingMembership } = await admin
+    .from('vault_members')
+    .select('vault_id')
+    .eq('user_id', req.userId)
+    .maybeSingle();
+
+  if (existingMembership) {
+    throw new HttpError(400, 'You are already linked to an account in the system.');
+  }
+
   const { code } = z.object({ code: z.string().min(4) }).parse(req.body);
   const { data: v } = await admin.from('vaults').select('*').eq('invite_code', code.trim().toUpperCase()).maybeSingle();
   if (!v) throw new HttpError(404, 'No vault found with that invite code');
@@ -299,8 +329,22 @@ vault.post('/vault/admin/link', requireVault, h(async (req, res) => {
   const { data: userResp } = await admin.auth.admin.getUserById(userId);
   if (!userResp?.user) throw new HttpError(404, 'User not found in system');
 
-  // Insert or update member in admin's vault
-  const { error } = await admin.from('vault_members').upsert({
+  // Do not allow linking if already linked to ANY account/vault in the system
+  const { data: existingLink } = await admin
+    .from('vault_members')
+    .select('vault_id')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (existingLink) {
+    if (existingLink.vault_id === req.vaultId) {
+      throw new HttpError(400, 'This partner is already linked to your vault.');
+    }
+    throw new HttpError(400, 'This partner is already linked to another account in the system.');
+  }
+
+  // Insert member in admin's vault
+  const { error } = await admin.from('vault_members').insert({
     vault_id: req.vaultId!,
     user_id: userId,
   });
