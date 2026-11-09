@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { admin, anon } from '../supabase';
 import { h, HttpError } from '../middleware/auth';
 import { sendPasswordResetOtpEmail } from '../services/mailer';
+import { logAndAlertPartner } from '../services/notify';
 
 export const auth = Router();
 
@@ -75,6 +76,18 @@ auth.post('/login', h(async (req, res) => {
   }
 
   const me = await fetchMe(data.session.user.id, data.session.user.email);
+
+  // Notify partner when a member logs in
+  if (me.vault && me.partner) {
+    const actorName = me.profile.name || data.session.user.email || 'Partner';
+    logAndAlertPartner(
+      me.vault.id,
+      data.session.user.id,
+      'join',
+      `${actorName} logged in to DuoSave`
+    ).catch(() => {});
+  }
+
   res.json({ token: data.session.access_token, refreshToken: data.session.refresh_token, me });
 }));
 

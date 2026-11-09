@@ -204,13 +204,13 @@ export default function SavingsScreen() {
             </Pressable>
           </View>
 
-          <T size={13}>
+          <T size={13} style={{ lineHeight: 19 }}>
             {data?.reminder?.body ??
               (isTodayReminderDay
-                ? `Today is your scheduled monthly savings day! Both partners are reminded to add their contributions toward the ${money(s?.vault.monthly_target ?? 0, cur)} target.`
+                ? `Today is your scheduled monthly savings day! You and your partner are required to save ${money(s?.vault.monthly_target ?? 0, cur)} this month. Please add your contribution now.`
                 : isApproaching
-                ? `Your scheduled monthly savings day is on the ${reminderDay}th. Get ready to save!`
-                : `Your monthly contribution day was on the ${reminderDay}th. So far ${money(monthTotal, cur)} of ${money(s?.vault.monthly_target ?? 0, cur)} has been saved this month.`)}
+                ? `Upcoming savings deadline in ${daysUntilReminder} day${daysUntilReminder > 1 ? 's' : ''} (Day ${reminderDay})! You and your partner are required to save ${money(s?.vault.monthly_target ?? 0, cur)} this month. Keep up your shared goal!`
+                : `Your monthly contribution day was on the ${reminderDay}th. You are required to save ${money(s?.vault.monthly_target ?? 0, cur)} this month (so far ${money(monthTotal, cur)} saved).`)}
           </T>
 
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>

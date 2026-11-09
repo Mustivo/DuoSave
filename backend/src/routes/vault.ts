@@ -545,7 +545,7 @@ vault.get('/vault/summary', requireVault, h(async (req, res) => {
 
 // Manual "remind us now" button.
 vault.post('/vault/remind', requireVault, h(async (req, res) => {
-  const { data: v } = await admin.from('vaults').select('currency,monthly_target').eq('id', req.vaultId!).single();
-  await sendSaveReminder(req.vaultId!, v!.currency, Number(v!.monthly_target));
+  const { data: v } = await admin.from('vaults').select('currency,monthly_target,reminder_day').eq('id', req.vaultId!).single();
+  await sendSaveReminder(req.vaultId!, v!.currency, Number(v!.monthly_target), 0, Number(v?.reminder_day));
   res.json({ ok: true });
 }));

@@ -154,10 +154,16 @@ const translations = {
 
     // Analytics Screen
     analytics_title: 'Analytics',
-    saved_per_month: 'Saved per month',
-    who_saved_what: 'Who saved what',
-    money_out_on_loan: 'Money out on loan',
+    saved_per_month: 'Savings Growth (Last 6 Months)',
+    who_saved_what: 'Partner Contribution Breakdown',
+    money_out_on_loan: 'Money Out on Loan',
     owes_label: '{name} owes',
+    total_vault_savings: 'Total Vault Savings',
+    this_month_saved: 'Saved This Month',
+    monthly_avg: 'Monthly Average',
+    analytics_target_progress: 'Target Progress',
+    current_month_badge: 'Current',
+    no_loans_active: 'No active loans in the vault',
 
     // Account Screen
     account_title: 'Account',
@@ -373,10 +379,16 @@ const translations = {
 
     // Analytics Screen
     analytics_title: 'Isesengura',
-    saved_per_month: 'Ibyazigamwe buri kwezi',
-    who_saved_what: 'Ibyazigamwe na buri wese',
-    money_out_on_loan: 'Amafaranga ari mu nguzanyo',
-    owes_label: '{name} abereyemo itsinda',
+    saved_per_month: 'Ubwiyongere bw\'Ubwizigame (Amezi 6 Ashize)',
+    who_saved_what: 'Imisanzu y\'Abafatanyabikorwa',
+    money_out_on_loan: 'Amafaranga Ari mu Nguzanyo',
+    owes_label: '{name} arimo',
+    total_vault_savings: 'Ubwizigame Bwose Hamwe',
+    this_month_saved: 'Byazigamwe muri Uku Kwezi',
+    monthly_avg: 'Impuzandengo ya Buri Kwezi',
+    analytics_target_progress: 'Intambwe ku Ntego',
+    current_month_badge: 'Uku Kwezi',
+    no_loans_active: 'Nta nguzanyo ziriho ubu mu itsinda',
 
     // Account Screen
     account_title: 'Konti',

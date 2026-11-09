@@ -8,11 +8,11 @@ import { ActivityItem } from '../types';
 import { Card, ConfirmModal, ErrorText, Screen, StatusModal, SwipeableItem, T, money, timeAgo, useLoad } from '../ui';
 
 const icons: Record<string, keyof typeof Ionicons.glyphMap> = {
-  deposit: 'arrow-down-circle',
-  loan: 'arrow-up-circle',
-  repayment: 'refresh-circle',
-  reminder: 'alarm',
-  join: 'person-add',
+  deposit: 'arrow-down',
+  loan: 'arrow-up',
+  repayment: 'refresh',
+  reminder: 'notifications',
+  join: 'log-in-outline',
 };
 
 export default function ActivityScreen() {
@@ -68,7 +68,6 @@ export default function ActivityScreen() {
   };
 
   const handleDeleteItem = async (id: string) => {
-    // Optimistic removal
     setItems((prev) => prev.filter((item) => item.id !== id));
     try {
       await api.delete(`/activity/${id}`).catch(() => {});
@@ -79,6 +78,14 @@ export default function ActivityScreen() {
   };
 
   const color = (type: string) => (type === 'loan' ? c.warn : type === 'deposit' || type === 'repayment' ? c.accent : c.blue);
+
+  const typeLabel = (type: string) => {
+    if (type === 'deposit') return 'Savings';
+    if (type === 'loan') return 'Loan';
+    if (type === 'repayment') return 'Repayment';
+    if (type === 'reminder') return 'Reminder';
+    return 'Partner Activity';
+  };
 
   return (
     <Screen title={t('activity_title')} onRefresh={reload} refreshing={loading}>
@@ -118,32 +125,86 @@ export default function ActivityScreen() {
       )}
 
       {items.length === 0 && !loading && (
-        <T muted style={{ marginTop: 12 }}>{t('empty_activity')}</T>
+        <Card style={{ padding: 24, alignItems: 'center', gap: 8 }}>
+          <Ionicons name="notifications-outline" size={36} color={c.muted} />
+          <T muted style={{ textAlign: 'center' }}>{t('empty_activity')}</T>
+        </Card>
       )}
 
-      {items.map((a) => (
-        <SwipeableItem key={a.id} onDelete={() => handleDeleteItem(a.id)}>
-          <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-            <Ionicons name={icons[a.type] ?? 'ellipse'} size={28} color={color(a.type)} />
-            <View style={{ flex: 1 }}>
-              <T weight="600">{a.message}</T>
-              <T size={12} muted>{timeAgo(a.created_at)}</T>
-            </View>
-            {a.amount ? <T weight="700" color={color(a.type)}>{a.type === 'loan' ? '-' : '+'}{money(Number(a.amount))}</T> : null}
-            <Pressable
-              onPress={() => handleDeleteItem(a.id)}
-              hitSlop={8}
-              style={({ pressed }) => ({
-                padding: 6,
-                borderRadius: 8,
-                backgroundColor: c.danger + '14',
-                opacity: pressed ? 0.6 : 1,
-              })}>
-              <Ionicons name="trash-outline" size={16} color={c.danger} />
-            </Pressable>
-          </Card>
-        </SwipeableItem>
-      ))}
+      {items.map((a) => {
+        const itemColor = color(a.type);
+        const isLoginOrJoin = a.type === 'join';
+        return (
+          <SwipeableItem key={a.id} onDelete={() => handleDeleteItem(a.id)}>
+            <Card style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 12,
+              padding: 14,
+              borderLeftWidth: 3.5,
+              borderLeftColor: itemColor,
+            }}>
+              {/* Highlighted Icon Badge */}
+              <View style={{
+                width: 44,
+                height: 44,
+                borderRadius: 22,
+                backgroundColor: itemColor + '20',
+                borderWidth: 1,
+                borderColor: itemColor + '40',
+                justifyContent: 'center',
+                alignItems: 'center',
+              }}>
+                <Ionicons name={icons[a.type] ?? 'ellipse'} size={20} color={itemColor} />
+              </View>
+
+              {/* Message & Details */}
+              <View style={{ flex: 1, gap: 3 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <View style={{
+                    backgroundColor: itemColor + '18',
+                    paddingHorizontal: 6,
+                    paddingVertical: 1,
+                    borderRadius: 4,
+                  }}>
+                    <T size={10} weight="800" color={itemColor} style={{ textTransform: 'uppercase' }}>
+                      {typeLabel(a.type)}
+                    </T>
+                  </View>
+                  <T size={11} muted>{timeAgo(a.created_at)}</T>
+                </View>
+
+                <T weight={isLoginOrJoin ? '700' : '600'} size={14} color={c.text} style={{ lineHeight: 19 }}>
+                  {a.message}
+                </T>
+              </View>
+
+              {/* Amount Tag */}
+              {a.amount ? (
+                <View style={{ alignItems: 'flex-end', marginLeft: 4 }}>
+                  <T weight="800" size={14} color={itemColor}>
+                    {a.type === 'loan' ? '-' : '+'}{money(Number(a.amount))}
+                  </T>
+                </View>
+              ) : null}
+
+              {/* Delete Icon */}
+              <Pressable
+                onPress={() => handleDeleteItem(a.id)}
+                hitSlop={8}
+                style={({ pressed }) => ({
+                  padding: 6,
+                  borderRadius: 8,
+                  backgroundColor: c.danger + '14',
+                  opacity: pressed ? 0.6 : 1,
+                  marginLeft: 4,
+                })}>
+                <Ionicons name="trash-outline" size={15} color={c.danger} />
+              </Pressable>
+            </Card>
+          </SwipeableItem>
+        );
+      })}
 
       {/* Confirmation Modal */}
       <ConfirmModal

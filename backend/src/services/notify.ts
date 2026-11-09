@@ -32,16 +32,38 @@ export async function logAndAlertPartner(
   await push(partners, 'DuoSave', message);
 }
 
-/** Ask both people to save. They answer by typing the amount in the app. */
-export async function sendSaveReminder(vaultId: string, currency: string, monthlyTarget: number) {
+/** Send automatic savings reminder showing required monthly savings. */
+export async function sendSaveReminder(
+  vaultId: string,
+  currency: string,
+  monthlyTarget: number,
+  daysBefore = 0,
+  reminderDay?: number,
+) {
   const ids = await membersOf(vaultId);
   if (!ids.length) return;
-  const body = monthlyTarget > 0
-    ? `Time to save. Your shared target is ${monthlyTarget} ${currency} this month. Enter what you saved.`
-    : 'Time to save. Enter how much you are adding this month.';
+
+  const targetFormatted = monthlyTarget > 0 ? `${monthlyTarget.toLocaleString()} ${currency}` : `your monthly target`;
+
+  const title = daysBefore > 0
+    ? `Savings Reminder (3 Days Remaining)`
+    : `Monthly Savings Day!`;
+
+  const body = daysBefore > 0
+    ? `Upcoming deadline in 3 days: You and your partner are required to save ${targetFormatted} this month before day ${reminderDay ?? ''}. Please deposit your contribution!`
+    : `Today is your scheduled savings day! Both partners are required to save towards the ${targetFormatted} monthly target.`;
+
   await admin.from('notifications').insert(
-    ids.map((user_id) => ({ vault_id: vaultId, user_id, type: 'reminder', title: 'Savings time', body })),
+    ids.map((user_id) => ({ vault_id: vaultId, user_id, type: 'reminder', title, body })),
   );
-  await admin.from('activity').insert({ vault_id: vaultId, type: 'reminder', message: 'Monthly savings reminder sent to both partners' });
-  await push(ids, 'Savings time', body);
+
+  await admin.from('activity').insert({
+    vault_id: vaultId,
+    type: 'reminder',
+    message: daysBefore > 0
+      ? `3-Day notice: Required monthly savings of ${targetFormatted} due on day ${reminderDay ?? ''}`
+      : `Monthly savings reminder: Required ${targetFormatted} target due today`,
+  });
+
+  await push(ids, title, body);
 }
