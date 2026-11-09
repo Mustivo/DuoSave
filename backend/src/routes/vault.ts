@@ -65,6 +65,7 @@ vault.post('/vault/partner', requireVault, h(async (req, res) => {
   const b = z.object({
     name: z.string().min(1).max(40),
     email: z.string().email(),
+    password: z.string().min(6).optional(),
   }).parse(req.body);
 
   const email = b.email.trim().toLowerCase();
@@ -85,9 +86,11 @@ vault.post('/vault/partner', requireVault, h(async (req, res) => {
     throw new HttpError(400, 'This email is already registered. You can link them directly from the System Directory below.');
   }
 
+  const initialPassword = b.password ? b.password : randomBytes(32).toString('base64url');
+
   const { data: created, error } = await admin.auth.admin.createUser({
     email,
-    password: randomBytes(32).toString('base64url'),
+    password: initialPassword,
     email_confirm: true,
   });
   if (error || !created.user) {
@@ -103,21 +106,22 @@ vault.post('/vault/partner', requireVault, h(async (req, res) => {
 
   const { data: adminProf } = await admin.from('profiles').select('name').eq('id', req.userId).maybeSingle();
   const adminName = adminProf?.name || 'Administrator';
-  const { data: recovery, error: recoveryError } = await admin.auth.admin.generateLink({ type: 'recovery', email });
-  if (recoveryError || !recovery.properties?.email_otp) {
-    throw new HttpError(500, 'Could not prepare the partner setup email');
-  }
-  const otp = recovery.properties.email_otp;
-  await admin.auth.admin.updateUserById(partnerUser.id, {
-    user_metadata: { ...partnerUser.user_metadata, setup_otp: otp },
-  }).catch(() => {});
+  try {
+    const { data: recovery, error: recoveryError } = await admin.auth.admin.generateLink({ type: 'recovery', email });
+    if (!recoveryError && recovery?.properties?.email_otp) {
+      const otp = recovery.properties.email_otp;
+      await admin.auth.admin.updateUserById(partnerUser.id, {
+        user_metadata: { ...partnerUser.user_metadata, setup_otp: otp },
+      }).catch(() => {});
 
-  await sendPartnerSetupOtpEmail({
-    to: email,
-    name: b.name.trim(),
-    otp,
-    adminName,
-  });
+      await sendPartnerSetupOtpEmail({
+        to: email,
+        name: b.name.trim(),
+        otp,
+        adminName,
+      }).catch(() => {});
+    }
+  } catch {}
 
   res.json({ ok: true, partner: { id: partnerUser.id, name: b.name, email: b.email } });
 }));
@@ -168,17 +172,28 @@ vault.delete('/vault/partner/:userId', requireVault, h(async (req, res) => {
     throw new HttpError(403, `Only master administrator (${MASTER_ADMIN_EMAIL}) can delete partners`);
   }
   const targetUserId = req.params.userId;
-  const permanent = req.query.permanent === 'true';
+  // Permanent by default unless specifically asked to only unlink
+  const onlyUnlink = req.query.unlinkOnly === 'true';
 
   if (targetUserId === req.userId) {
     throw new HttpError(400, 'Cannot remove yourself as admin. Delete or transfer the vault instead.');
   }
-  const { data: pProfile } = await admin.from('profiles').select('name').eq('id', targetUserId).maybeSingle();
-  const partnerName = pProfile?.name || 'Partner';
-  await admin.from('vault_members').delete().eq('vault_id', req.vaultId!).eq('user_id', targetUserId);
 
-  if (permanent) {
+  const { data: targetUser } = await admin.auth.admin.getUserById(targetUserId);
+  if (targetUser?.user?.email?.toLowerCase() === MASTER_ADMIN_EMAIL) {
+    throw new HttpError(400, 'Cannot delete master administrator');
+  }
+
+  const { data: pProfile } = await admin.from('profiles').select('name').eq('id', targetUserId).maybeSingle();
+  const partnerName = pProfile?.name || targetUser?.user?.email || 'Partner';
+
+  await admin.from('vault_members').delete().eq('user_id', targetUserId);
+
+  if (!onlyUnlink) {
     await admin.from('notifications').delete().eq('user_id', targetUserId);
+    await admin.from('notifications').delete().eq('actor_id', targetUserId);
+    await admin.from('contributions').delete().eq('user_id', targetUserId);
+    await admin.from('loans').delete().eq('borrower_id', targetUserId);
     await admin.from('profiles').delete().eq('id', targetUserId);
     try {
       await admin.auth.admin.deleteUser(targetUserId);
@@ -187,8 +202,8 @@ vault.delete('/vault/partner/:userId', requireVault, h(async (req, res) => {
     }
   }
 
-  await logAndAlertPartner(req.vaultId!, req.userId, 'join', `${partnerName} was removed from the vault`);
-  res.json({ ok: true, message: `${partnerName} was removed from the vault` });
+  await logAndAlertPartner(req.vaultId!, req.userId, 'join', `${partnerName} was permanently deleted from the system`);
+  res.json({ ok: true, message: `${partnerName} was permanently deleted from the system` });
 }));
 
 vault.delete('/vault/admin/user/:userId', h(async (req, res) => {
@@ -375,6 +390,117 @@ vault.post('/vault/admin/unlink', requireVault, h(async (req, res) => {
   await logAndAlertPartner(req.vaultId!, req.userId, 'join', `${partnerName} was unlinked from the vault`);
 
   res.json({ ok: true, message: `${partnerName} was unlinked from your vault` });
+}));
+
+vault.post('/vault/admin/users/create', requireVault, h(async (req, res) => {
+  if (!isMasterAdmin(req.userEmail)) {
+    throw new HttpError(403, `Only master administrator (${MASTER_ADMIN_EMAIL}) can create partners`);
+  }
+
+  const { email, password, name, linkToVault } = z.object({
+    email: z.string().email(),
+    password: z.string().min(6),
+    name: z.string().min(1),
+    linkToVault: z.boolean().optional().default(true),
+  }).parse(req.body);
+
+  const cleanEmail = email.trim().toLowerCase();
+
+  // Create user in Supabase auth
+  const { data: newUser, error: createErr } = await admin.auth.admin.createUser({
+    email: cleanEmail,
+    password,
+    email_confirm: true,
+    user_metadata: { name: name.trim() },
+  });
+
+  if (createErr || !newUser?.user) {
+    throw new HttpError(400, createErr?.message || 'Failed to create user');
+  }
+
+  const userId = newUser.user.id;
+
+  // Upsert profile
+  await admin.from('profiles').upsert({
+    id: userId,
+    name: name.trim(),
+  });
+
+  // Link to vault if requested
+  if (linkToVault && req.vaultId) {
+    // Check if partner is already linked to any vault
+    const { data: existingLink } = await admin
+      .from('vault_members')
+      .select('vault_id')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (!existingLink) {
+      await admin.from('vault_members').insert({
+        vault_id: req.vaultId,
+        user_id: userId,
+      });
+      await logAndAlertPartner(req.vaultId, req.userId, 'join', `${name.trim()} was created and linked to vault by master admin`);
+    }
+  }
+
+  res.json({
+    ok: true,
+    user: {
+      id: userId,
+      email: cleanEmail,
+      name: name.trim(),
+      isLinkedToMyVault: !!linkToVault,
+    },
+    message: `Partner ${name.trim()} (${cleanEmail}) created successfully`,
+  });
+}));
+
+vault.delete('/vault/admin/users/:userId', requireVault, h(async (req, res) => {
+  if (!isMasterAdmin(req.userEmail)) {
+    throw new HttpError(403, `Only master administrator (${MASTER_ADMIN_EMAIL}) can delete partners`);
+  }
+
+  const { userId } = req.params;
+  if (!userId) throw new HttpError(400, 'User ID is required');
+
+  if (userId === req.userId) {
+    throw new HttpError(400, 'Cannot delete yourself as master administrator');
+  }
+
+  const { data: targetUser } = await admin.auth.admin.getUserById(userId);
+  if (targetUser?.user?.email?.toLowerCase() === MASTER_ADMIN_EMAIL) {
+    throw new HttpError(400, 'Cannot delete master administrator');
+  }
+
+  const { data: p } = await admin.from('profiles').select('name').eq('id', userId).maybeSingle();
+  const partnerName = p?.name || targetUser?.user?.email || 'Partner';
+
+  // 1. Remove from all vaults
+  await admin.from('vault_members').delete().eq('user_id', userId);
+
+  // 2. Remove notifications
+  await admin.from('notifications').delete().eq('user_id', userId);
+  await admin.from('notifications').delete().eq('actor_id', userId);
+
+  // 3. Remove contributions & loans if any
+  await admin.from('contributions').delete().eq('user_id', userId);
+  await admin.from('loans').delete().eq('borrower_id', userId);
+
+  // 4. Remove profile
+  await admin.from('profiles').delete().eq('id', userId);
+
+  // 5. Delete Supabase auth account
+  const { error: delErr } = await admin.auth.admin.deleteUser(userId);
+  if (delErr) {
+    throw new HttpError(400, delErr.message || 'Failed to delete partner from auth system');
+  }
+
+  if (req.vaultId) {
+    await logAndAlertPartner(req.vaultId, req.userId, 'join', `${partnerName} was permanently deleted from the system by master admin`);
+  }
+
+  res.json({ ok: true, message: `${partnerName} was permanently deleted from the system` });
 }));
 
 vault.get('/vault/summary', requireVault, h(async (req, res) => {

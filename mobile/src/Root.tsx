@@ -94,28 +94,12 @@ export default function Root() {
         {bar}
         <View />
         <View style={{ alignItems: 'center', gap: 18 }}>
-          {/* Centered DuoSave Logo with glowing border */}
-          <View style={{
-            width: 108,
-            height: 108,
-            borderRadius: 26,
-            backgroundColor: c.card,
-            borderWidth: 2,
-            borderColor: c.accent + '66',
-            justifyContent: 'center',
-            alignItems: 'center',
-            shadowColor: c.accent,
-            shadowOffset: { width: 0, height: 8 },
-            shadowOpacity: 0.35,
-            shadowRadius: 18,
-            elevation: 12,
-          }}>
-            <Image
-              source={require('../assets/icon.png')}
-              style={{ width: 88, height: 88, borderRadius: 20 }}
-              resizeMode="contain"
-            />
-          </View>
+          {/* Centered DuoSave Logo (Clean, borderless) */}
+          <Image
+            source={require('../assets/icon.png')}
+            style={{ width: 104, height: 104 }}
+            resizeMode="contain"
+          />
 
           <View style={{ alignItems: 'center', gap: 6 }}>
             <T size={34} weight="800" style={{ letterSpacing: 0.5 }}>DuoSave</T>

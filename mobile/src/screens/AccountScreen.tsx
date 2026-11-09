@@ -35,6 +35,7 @@ export default function AccountScreen() {
   // Partner account creation state
   const [pName, setPName] = useState('');
   const [pEmail, setPEmail] = useState('');
+  const [pPassword, setPPassword] = useState('');
   const [pBusy, setPBusy] = useState(false);
   const [pErr, setPErr] = useState<string | null>(null);
   const [pSuccess, setPSuccess] = useState<string | null>(null);
@@ -135,6 +136,7 @@ export default function AccountScreen() {
   const handleSavePartner = async () => {
     if (!pName.trim()) { setPErr('Enter the partner name'); return; }
     if (!pEmail.trim() || !pEmail.includes('@')) { setPErr('Enter a valid email address'); return; }
+    if (pPassword && pPassword.length < 6) { setPErr('Password must be at least 6 characters'); return; }
 
     setPErr(null);
     setPSuccess(null);
@@ -143,14 +145,16 @@ export default function AccountScreen() {
       const res = await api.post<{ ok: boolean; partner: { id: string; name: string; email: string } }>('/vault/partner', {
         name: pName.trim(),
         email: pEmail.trim().toLowerCase(),
+        password: pPassword.trim() || undefined,
       });
       setPName('');
       setPEmail('');
-      setPSuccess(`Partner ${res.partner.name} (${res.partner.email}) is linked.`);
+      setPPassword('');
+      setPSuccess(`Partner ${res.partner.name} (${res.partner.email}) was created and linked.`);
       setStatusConfig({
         visible: true,
-        title: 'Partner Linked',
-        message: `Account for ${res.partner.name} (${res.partner.email}) was created. A secure password setup code was emailed to them.`,
+        title: 'Partner Created & Linked',
+        message: `Account for ${res.partner.name} (${res.partner.email}) was successfully created and linked to your vault.${pPassword ? ' They can now log in using the assigned password.' : ' A password setup code was emailed to them.'}`,
         type: 'success',
       });
       await Promise.all([refreshMe(), loadDirectory()]);
@@ -205,7 +209,7 @@ export default function AccountScreen() {
     });
   };
 
-  const handleDeletePartner = (partnerToDelete: { id: string; name: string }) => {
+  const handleDeletePartner = (partnerToDelete: { id: string; name: string; email?: string }) => {
     setConfirmConfig({
       visible: true,
       title: t('delete_partner_title'),
@@ -223,7 +227,7 @@ export default function AccountScreen() {
           setStatusConfig({
             visible: true,
             title: t('delete_partner'),
-            message: `${partnerToDelete.name} has been removed from this vault.`,
+            message: t('delete_partner_success', { name: partnerToDelete.name }),
             type: 'info',
           });
         } catch (e: any) {
@@ -425,52 +429,86 @@ export default function AccountScreen() {
                       </View>
                     </View>
 
-                    {user.isLinkedToMyVault ? (
-                      <Pressable
-                        onPress={() => handleDeletePartner(user)}
-                        disabled={pBusy}
-                        hitSlop={8}
-                        style={({ pressed }) => ({
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          gap: 4,
-                          backgroundColor: c.danger + '20',
-                          paddingHorizontal: 12,
-                          paddingVertical: 6,
-                          borderRadius: 8,
-                          borderWidth: 1,
-                          borderColor: c.danger + '40',
-                          opacity: pressed || pBusy ? 0.6 : 1,
-                        })}>
-                        <Ionicons name="trash-outline" size={13} color={c.danger} />
-                        <T size={12} weight="700" color={c.danger}>{t('delete_partner')}</T>
-                      </Pressable>
-                    ) : user.isLinkedToAnyVault ? (
-                      <View style={{
-                        paddingHorizontal: 10,
-                        paddingVertical: 6,
-                        borderRadius: 8,
-                        backgroundColor: c.card,
-                        borderWidth: 1,
-                        borderColor: c.border,
-                      }}>
-                        <T size={11} weight="600" muted>{t('already_linked')}</T>
-                      </View>
-                    ) : (
-                      <Pressable
-                        onPress={() => handleLinkFromDirectory(user)}
-                        disabled={pBusy}
-                        hitSlop={8}
-                        style={({ pressed }) => ({
-                          backgroundColor: c.accent + '20',
-                          paddingHorizontal: 12,
-                          paddingVertical: 6,
-                          borderRadius: 8,
-                          opacity: pressed || pBusy ? 0.6 : 1,
-                        })}>
-                        <T size={12} weight="700" color={c.accent}>{t('link_to_vault')}</T>
-                      </Pressable>
-                    )}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      {user.isLinkedToMyVault ? (
+                        <Pressable
+                          onPress={() => handleDeletePartner(user)}
+                          disabled={pBusy}
+                          hitSlop={8}
+                          style={({ pressed }) => ({
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 4,
+                            backgroundColor: c.danger + '20',
+                            paddingHorizontal: 12,
+                            paddingVertical: 6,
+                            borderRadius: 8,
+                            borderWidth: 1,
+                            borderColor: c.danger + '40',
+                            opacity: pressed || pBusy ? 0.6 : 1,
+                          })}>
+                          <Ionicons name="trash-outline" size={13} color={c.danger} />
+                          <T size={12} weight="700" color={c.danger}>{t('delete_partner')}</T>
+                        </Pressable>
+                      ) : user.isLinkedToAnyVault ? (
+                        <>
+                          <View style={{
+                            paddingHorizontal: 10,
+                            paddingVertical: 6,
+                            borderRadius: 8,
+                            backgroundColor: c.card,
+                            borderWidth: 1,
+                            borderColor: c.border,
+                          }}>
+                            <T size={11} weight="600" muted>{t('already_linked')}</T>
+                          </View>
+                          <Pressable
+                            onPress={() => handleDeletePartner(user)}
+                            disabled={pBusy}
+                            hitSlop={8}
+                            style={({ pressed }) => ({
+                              backgroundColor: c.danger + '20',
+                              padding: 7,
+                              borderRadius: 8,
+                              borderWidth: 1,
+                              borderColor: c.danger + '40',
+                              opacity: pressed || pBusy ? 0.6 : 1,
+                            })}>
+                            <Ionicons name="trash-outline" size={14} color={c.danger} />
+                          </Pressable>
+                        </>
+                      ) : (
+                        <>
+                          <Pressable
+                            onPress={() => handleLinkFromDirectory(user)}
+                            disabled={pBusy}
+                            hitSlop={8}
+                            style={({ pressed }) => ({
+                              backgroundColor: c.accent + '20',
+                              paddingHorizontal: 12,
+                              paddingVertical: 6,
+                              borderRadius: 8,
+                              opacity: pressed || pBusy ? 0.6 : 1,
+                            })}>
+                            <T size={12} weight="700" color={c.accent}>{t('link_to_vault')}</T>
+                          </Pressable>
+                          <Pressable
+                            onPress={() => handleDeletePartner(user)}
+                            disabled={pBusy}
+                            hitSlop={8}
+                            style={({ pressed }) => ({
+                              backgroundColor: c.danger + '20',
+                              padding: 7,
+                              borderRadius: 8,
+                              borderWidth: 1,
+                              borderColor: c.danger + '40',
+                              opacity: pressed || pBusy ? 0.6 : 1,
+                            })}>
+                            <Ionicons name="trash-outline" size={14} color={c.danger} />
+                          </Pressable>
+                        </>
+                      )}
+                    </View>
                   </View>
                 ))}
               </View>
@@ -480,20 +518,21 @@ export default function AccountScreen() {
           {/* Create & Link Brand New Partner Account */}
           <Card>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <T weight="700" size={16}>Create & Link New Partner</T>
+              <T weight="700" size={16}>{t('create_new_partner')}</T>
               <View style={{ backgroundColor: c.accent + '18', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
                 <T size={11} weight="600" color={c.accent}>Admin Only</T>
               </View>
             </View>
             <T size={13} muted>
-              Need to add someone new? Create their account here. An activation code will be sent to their email so they can set their password.
+              {t('create_partner_desc')}
             </T>
 
             <Input label="Partner Name" placeholder="e.g. Marie" value={pName} onChangeText={setPName} />
             <Input label="Partner Email" placeholder="marie@email.com" keyboardType="email-address" autoCapitalize="none" value={pEmail} onChangeText={setPEmail} />
+            <Input label={t('partner_password_placeholder')} placeholder="Min 6 characters (or empty for OTP)" secureTextEntry value={pPassword} onChangeText={setPPassword} />
             {pSuccess && <T size={13} color={c.accent} weight="600">{pSuccess}</T>}
             <ErrorText msg={pErr} />
-            <Button label={pBusy ? 'Saving...' : '+ Create & Link Partner'} onPress={handleSavePartner} loading={pBusy} />
+            <Button label={pBusy ? 'Saving...' : `+ ${t('create_new_partner')}`} onPress={handleSavePartner} loading={pBusy} />
           </Card>
         </>
       )}

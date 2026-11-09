@@ -214,7 +214,7 @@ export default function AuthScreen() {
           
           {/* Centered Logo Header */}
           <View style={{ gap: 8, marginTop: 12, marginBottom: 16, alignItems: 'center' }}>
-            <Image source={require('../../assets/icon.png')} style={{ width: 84, height: 84, borderRadius: 20 }} />
+            <Image source={require('../../assets/icon.png')} style={{ width: 88, height: 88 }} resizeMode="contain" />
             <T size={32} weight="800" style={{ textAlign: 'center' }}>DuoSave</T>
             <T muted style={{ textAlign: 'center', maxWidth: 300 }}>
               {mode === 'login' && t('sign_in_subtitle')}

@@ -69,7 +69,7 @@ export function Screen({ title, children, onRefresh, refreshing }: {
         keyboardShouldPersistTaps="handled"
         refreshControl={onRefresh ? <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={c.accent} /> : undefined}>
         <View>
-          <Image source={require('../assets/icon.png')} style={{ width: 72, height: 72, borderRadius: 18 }} />
+          <Image source={require('../assets/icon.png')} style={{ width: 68, height: 68 }} resizeMode="contain" />
           <Text style={{ color: c.accent, fontWeight: '700', fontSize: 13 }}>DuoSave</Text>
           <Text style={{ color: c.text, fontWeight: '800', fontSize: 28, marginTop: 2 }}>{title}</Text>
           <Text style={{ color: c.muted, fontSize: 12, marginTop: 2 }}>{linked}</Text>
