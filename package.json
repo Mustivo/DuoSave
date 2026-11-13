@@ -19,3 +19,4 @@
     "install:all": "npm --prefix backend install && npm --prefix mobile install"
   }
 }
+
