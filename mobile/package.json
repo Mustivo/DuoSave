@@ -1,6 +1,7 @@
 {
   "name": "duosave-mobile",
   "version": "1.0.0",
+  "private": true,
   "main": "index.ts",
   "scripts": {
     "start": "expo start -c",
