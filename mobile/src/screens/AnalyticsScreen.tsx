@@ -30,10 +30,11 @@ export default function AnalyticsScreen() {
   });
 
   const cur = data?.summary.vault.currency ?? 'RWF';
-  const partnerColors = [c.accent, c.blue, '#9b5de5', '#f15bb5'];
+  const partnerColors = [c.blue, '#9b5de5', '#f15bb5', '#fee440'];
   const members = data?.summary.members ?? [];
   const vault = data?.summary.vault;
   const rawList = data?.list ?? [];
+  const accountSavings = data?.summary.accountSavings ?? 0;
 
   const now = new Date();
   const currentMonthIdx = now.getMonth();
@@ -55,11 +56,16 @@ export default function AnalyticsScreen() {
       return `${xDate.getFullYear()}-${xDate.getMonth()}` === key;
     });
 
+    // Separate member personal deposits from general account savings
     const memberAmounts = members.map((m) =>
       listInMonth
-        .filter((x) => x.user_id === m.id)
+        .filter((x) => x.user_id === m.id && x.note !== 'Account savings')
         .reduce((sum, x) => sum + Number(x.amount), 0)
     );
+
+    const accountSavingsInMonth = listInMonth
+      .filter((x) => x.note === 'Account savings')
+      .reduce((sum, x) => sum + Number(x.amount), 0);
 
     const totalMonth = listInMonth.reduce((sum, x) => sum + Number(x.amount), 0);
 
@@ -69,6 +75,7 @@ export default function AnalyticsScreen() {
       fullTitle,
       isCurrent,
       memberAmounts,
+      accountSavingsInMonth,
       total: totalMonth,
     };
   });
@@ -79,10 +86,9 @@ export default function AnalyticsScreen() {
 
   // Overview metrics
   const totalVaultSaved = data?.summary.totalDeposited ?? rawList.reduce((s, x) => s + Number(x.amount), 0);
-  const thisMonthData = monthlyBuckets[monthlyBuckets.length - 1];
-  const thisMonthTotal = thisMonthData?.total ?? 0;
+  const thisMonthMembersTotal = members.reduce((sum, m) => sum + Number(m.thisMonth), 0);
   const monthlyTarget = vault?.monthly_target ?? 0;
-  const targetPct = monthlyTarget > 0 ? Math.min(100, Math.round((thisMonthTotal / monthlyTarget) * 100)) : 100;
+  const targetPct = monthlyTarget > 0 ? Math.min(100, Math.round((thisMonthMembersTotal / monthlyTarget) * 100)) : 100;
   const sixMonthsTotal = monthlyBuckets.reduce((s, b) => s + b.total, 0);
   const monthlyAvg = Math.round(sixMonthsTotal / 6);
   const availableBal = data?.summary.available ?? totalVaultSaved;
@@ -108,7 +114,7 @@ export default function AnalyticsScreen() {
             <Ionicons name="trending-up-outline" size={17} color={c.blue} />
             <T size={12} muted numberOfLines={1}>{t('this_month_saved')}</T>
           </View>
-          <T weight="800" size={20} color={c.text}>{money(thisMonthTotal, cur)}</T>
+          <T weight="800" size={20} color={c.text}>{money(thisMonthMembersTotal, cur)}</T>
           <T size={11} color={targetPct >= 100 ? c.accent : c.warn} weight="700">
             {monthlyTarget > 0 ? `${targetPct}% of goal` : 'Active'}
           </T>
@@ -130,26 +136,32 @@ export default function AnalyticsScreen() {
         </View>
 
         {/* Legend */}
-        {members.length > 0 && (
-          <View style={{
-            flexDirection: 'row',
-            flexWrap: 'wrap',
-            gap: 14,
-            marginBottom: 16,
-            paddingBottom: 10,
-            borderBottomWidth: 1,
-            borderColor: c.border + '60',
-          }}>
-            {members.map((m, idx) => (
-              <View key={m.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: partnerColors[idx % partnerColors.length] }} />
-                <T size={12} weight="600" color={c.text}>
-                  {m.id === me?.profile.id ? `${m.name} (${t('you_label')})` : m.name}
-                </T>
-              </View>
-            ))}
-          </View>
-        )}
+        <View style={{
+          flexDirection: 'row',
+          flexWrap: 'wrap',
+          gap: 14,
+          marginBottom: 16,
+          paddingBottom: 10,
+          borderBottomWidth: 1,
+          borderColor: c.border + '60',
+        }}>
+          {accountSavings > 0 && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: c.accent }} />
+              <T size={12} weight="600" color={c.text}>
+                {t('account_funds')}
+              </T>
+            </View>
+          )}
+          {members.map((m, idx) => (
+            <View key={m.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: partnerColors[idx % partnerColors.length] }} />
+              <T size={12} weight="600" color={c.text}>
+                {m.id === me?.profile.id ? `${m.name} (${t('you_label')})` : m.name}
+              </T>
+            </View>
+          ))}
+        </View>
 
         {/* Chart Canvas with Subtle Grid Lines */}
         <View style={{ height: 180, justifyContent: 'flex-end', paddingTop: 12 }}>
@@ -213,6 +225,15 @@ export default function AnalyticsScreen() {
                         shadowRadius: 8,
                         elevation: 4,
                       }}>
+                        {bucket.accountSavingsInMonth > 0 && (
+                          <View
+                            style={{
+                              width: '100%',
+                              height: (bucket.accountSavingsInMonth / bucket.total) * barHeight,
+                              backgroundColor: c.accent,
+                            }}
+                          />
+                        )}
                         {bucket.memberAmounts.map((amt, mIdx) => {
                           if (amt === 0) return null;
                           const partHeight = (amt / bucket.total) * barHeight;
@@ -278,8 +299,14 @@ export default function AnalyticsScreen() {
               </T>
             </View>
 
-            {selectedBucket.total > 0 && members.length > 0 && (
+            {selectedBucket.total > 0 && (
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 4, paddingTop: 6, borderTopWidth: 1, borderColor: c.border + '40' }}>
+                {selectedBucket.accountSavingsInMonth > 0 && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: c.accent }} />
+                    <T size={12} muted>{t('account_funds')}: <T weight="700" color={c.text}>{money(selectedBucket.accountSavingsInMonth, cur)}</T> ({Math.round((selectedBucket.accountSavingsInMonth / selectedBucket.total) * 100)}%)</T>
+                  </View>
+                )}
                 {members.map((m, idx) => {
                   const mAmount = selectedBucket.memberAmounts[idx] ?? 0;
                   const pct = selectedBucket.total > 0 ? Math.round((mAmount / selectedBucket.total) * 100) : 0;
@@ -305,7 +332,7 @@ export default function AnalyticsScreen() {
             <View style={{ alignItems: 'flex-end', gap: 2 }}>
               <T size={11} muted>{t('analytics_target_progress')}</T>
               <T size={14} weight="700" color={targetPct >= 100 ? c.accent : c.blue}>
-                {money(thisMonthTotal, cur)} / {money(monthlyTarget, cur)}
+                {money(thisMonthMembersTotal, cur)} / {money(monthlyTarget, cur)}
               </T>
             </View>
           )}
@@ -319,9 +346,54 @@ export default function AnalyticsScreen() {
           <T size={12} muted>{members.length} {members.length === 1 ? 'member' : 'members'}</T>
         </View>
 
-        <ProgressBar parts={members.map((m, i) => ({ value: m.total, color: partnerColors[i % partnerColors.length] }))} />
+        <ProgressBar parts={[
+          ...(accountSavings > 0 ? [{ value: accountSavings, color: c.accent }] : []),
+          ...members.map((m, i) => ({ value: m.total, color: partnerColors[i % partnerColors.length] })),
+        ]} />
 
         <View style={{ gap: 10, marginTop: 4 }}>
+          {accountSavings > 0 && (
+            <View
+              style={{
+                backgroundColor: c.cardAlt,
+                padding: 12,
+                borderRadius: 12,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                borderWidth: 1,
+                borderColor: c.accent + '40',
+              }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <View style={{
+                  width: 38,
+                  height: 38,
+                  borderRadius: 19,
+                  backgroundColor: c.accent + '20',
+                  borderWidth: 1.5,
+                  borderColor: c.accent,
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                }}>
+                  <Ionicons name="wallet-outline" size={18} color={c.accent} />
+                </View>
+                <View style={{ gap: 2 }}>
+                  <T weight="700" size={14}>{t('account_funds')}</T>
+                  <T size={12} muted>General vault reserve</T>
+                </View>
+              </View>
+
+              <View style={{ alignItems: 'flex-end', gap: 2 }}>
+                <T weight="800" size={15}>{money(accountSavings, cur)}</T>
+                <View style={{ backgroundColor: c.accent + '20', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
+                  <T size={11} weight="700" color={c.accent}>
+                    {totalVaultSaved > 0 ? Math.round((accountSavings / totalVaultSaved) * 100) : 0}%
+                  </T>
+                </View>
+              </View>
+            </View>
+          )}
+
           {members.map((m, i) => {
             const pct = totalVaultSaved > 0 ? Math.round((m.total / totalVaultSaved) * 100) : 0;
             const pColor = partnerColors[i % partnerColors.length];

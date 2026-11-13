@@ -17,9 +17,19 @@
         "backgroundColor": "#0A1128"
       }
     },
+    "notification": {
+      "icon": "./assets/notification-icon.png",
+      "color": "#2ED07C"
+    },
     "plugins": [
       "expo-secure-store",
-      "expo-notifications",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#2ED07C"
+        }
+      ],
       [
         "expo-splash-screen",
         {

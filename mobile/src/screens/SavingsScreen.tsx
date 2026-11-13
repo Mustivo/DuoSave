@@ -137,18 +137,29 @@ export default function SavingsScreen() {
           <Card style={{
             borderColor: c.accent,
             borderWidth: 1.5,
-            backgroundColor: c.accent + '18',
+            borderRadius: 18,
+            backgroundColor: c.accent + '14',
+            padding: 16,
           }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
-                <Ionicons name="sparkles" size={24} color={c.accent} />
-                <View style={{ flex: 1 }}>
-                  <T weight="700" size={15} color={c.accent}>{data.partnerNotif.title}</T>
-                  <T size={13}>{data.partnerNotif.body}</T>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
+                <View style={{
+                  width: 38,
+                  height: 38,
+                  borderRadius: 19,
+                  backgroundColor: c.accent + '25',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}>
+                  <Ionicons name="sparkles" size={20} color={c.accent} />
+                </View>
+                <View style={{ flex: 1, gap: 2 }}>
+                  <T weight="800" size={15} color={c.accent}>{data.partnerNotif.title}</T>
+                  <T size={13} color={c.text} style={{ lineHeight: 18 }}>{data.partnerNotif.body}</T>
                   <T size={11} muted style={{ marginTop: 2 }}>{t('swipe_to_dismiss')}</T>
                 </View>
               </View>
-              <Pressable onPress={handleDismissReminder} hitSlop={8} style={{ padding: 4 }}>
+              <Pressable onPress={handleDismissReminder} hitSlop={10} style={{ padding: 6 }}>
                 <Ionicons name="close" size={18} color={c.muted} />
               </Pressable>
             </View>
@@ -161,13 +172,24 @@ export default function SavingsScreen() {
         <Card style={{
           borderColor: c.warn,
           borderWidth: 1.5,
+          borderRadius: 18,
           backgroundColor: c.warn + '18',
+          padding: 16,
         }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            <Ionicons name="alert-circle" size={24} color={c.warn} />
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <View style={{
+              width: 38,
+              height: 38,
+              borderRadius: 19,
+              backgroundColor: c.warn + '25',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+              <Ionicons name="alert-circle" size={22} color={c.warn} />
+            </View>
             <View style={{ flex: 1, gap: 2 }}>
-              <T weight="700" size={15} color={c.warn}>{t('loan_review_needed')}</T>
-              <T size={13}>
+              <T weight="800" size={15} color={c.warn}>{t('loan_review_needed')}</T>
+              <T size={13} color={c.text}>
                 {t('loan_review_desc', { amount: money(Number(data.pendingLoanForMe.amount), cur) })}
               </T>
             </View>
@@ -175,58 +197,173 @@ export default function SavingsScreen() {
         </Card>
       )}
 
-      {/* Dynamic Notification Banner displayed for BOTH users based on reminder_day */}
-      {!dismissedLocalReminder && (data?.reminder || isTodayReminderDay || isApproaching || isPastDue) && (
-        <Card style={{
-          borderColor: isTodayReminderDay ? c.accent : isPastDue ? c.warn : c.blue,
-          borderWidth: 1.5,
-          backgroundColor: isTodayReminderDay ? c.accent + '12' : isPastDue ? c.warn + '12' : c.blue + '12',
-        }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-              <Ionicons
-                name={isTodayReminderDay ? 'notifications' : isPastDue ? 'alert-circle' : 'time-outline'}
-                size={22}
-                color={isTodayReminderDay ? c.accent : isPastDue ? c.warn : c.blue}
-              />
-              <T weight="700" color={isTodayReminderDay ? c.accent : isPastDue ? c.warn : c.blue} size={15}>
-                {isTodayReminderDay
-                  ? `🔔 Monthly Savings Day! (Day ${reminderDay})`
-                  : isApproaching
-                  ? `⏰ Savings Day in ${daysUntilReminder} day${daysUntilReminder > 1 ? 's' : ''}`
-                  : isPastDue
-                  ? `⚠️ Savings Reminder (Due Day ${reminderDay})`
-                  : (data?.reminder?.title ?? t('reminder_banner_title'))}
+      {/* Dynamic Modern Notification Banner displayed for BOTH users based on reminder_day */}
+      {!dismissedLocalReminder && (data?.reminder || isTodayReminderDay || isApproaching || isPastDue) && (() => {
+        const statusColor = isPastDue ? c.warn : isTodayReminderDay ? c.accent : c.blue;
+        const statusBadge = isTodayReminderDay
+          ? 'SAVINGS DAY • DUE TODAY'
+          : isApproaching
+          ? `UPCOMING DEADLINE • ${daysUntilReminder} DAY${daysUntilReminder > 1 ? 'S' : ''} LEFT`
+          : isPastDue
+          ? `PAYMENT OVERDUE • DUE DAY ${reminderDay}`
+          : `SAVINGS REMINDER • DAY ${reminderDay}`;
+
+        const statusTitle = isTodayReminderDay
+          ? `Monthly Savings Day! (Day ${reminderDay})`
+          : isApproaching
+          ? `Savings Deadline in ${daysUntilReminder} day${daysUntilReminder > 1 ? 's' : ''}`
+          : isPastDue
+          ? `Contribution Needed for Day ${reminderDay}`
+          : (data?.reminder?.title ?? t('reminder_banner_title'));
+
+        const targetAmount = s?.vault.monthly_target ?? 6000;
+        const targetPct = targetAmount > 0 ? Math.min(100, Math.round((monthTotal / targetAmount) * 100)) : 0;
+
+        return (
+          <Card style={{
+            borderColor: statusColor,
+            borderWidth: 1.5,
+            borderRadius: 20,
+            padding: 18,
+            backgroundColor: statusColor + '10',
+            gap: 12,
+          }}>
+            {/* Header: Status Pill Badge & Close Button */}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 6,
+                backgroundColor: statusColor + '22',
+                paddingHorizontal: 10,
+                paddingVertical: 4,
+                borderRadius: 8,
+              }}>
+                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: statusColor }} />
+                <T size={11} weight="800" color={statusColor}>
+                  {statusBadge}
+                </T>
+              </View>
+
+              <Pressable
+                onPress={handleDismissReminder}
+                hitSlop={10}
+                style={{
+                  width: 26,
+                  height: 26,
+                  borderRadius: 13,
+                  backgroundColor: c.cardAlt,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}>
+                <Ionicons name="close" size={16} color={c.muted} />
+              </Pressable>
+            </View>
+
+            {/* Title & Description */}
+            <View style={{ gap: 4 }}>
+              <T weight="800" size={17} color={c.text}>
+                {statusTitle}
+              </T>
+              <T size={13} muted style={{ lineHeight: 19 }}>
+                {data?.reminder?.body ??
+                  (isTodayReminderDay
+                    ? `Today is your scheduled savings day! Both partners are required to deposit towards the ${money(targetAmount, cur)} monthly target.`
+                    : isApproaching
+                    ? `Upcoming deadline in ${daysUntilReminder} day${daysUntilReminder > 1 ? 's' : ''} (Day ${reminderDay})! Both partners are required to deposit ${money(targetAmount, cur)} this month.`
+                    : `Monthly savings deadline was on day ${reminderDay}. You and your partner are required to save ${money(targetAmount, cur)} this month.`)}
               </T>
             </View>
-            <Pressable onPress={handleDismissReminder} hitSlop={8} style={{ padding: 4 }}>
-              <Ionicons name="close" size={18} color={c.muted} />
-            </Pressable>
-          </View>
 
-          <T size={13} style={{ lineHeight: 19 }}>
-            {data?.reminder?.body ??
-              (isTodayReminderDay
-                ? `Today is your scheduled monthly savings day! You and your partner are required to save ${money(s?.vault.monthly_target ?? 0, cur)} this month. Please add your contribution now.`
-                : isApproaching
-                ? `Upcoming savings deadline in ${daysUntilReminder} day${daysUntilReminder > 1 ? 's' : ''} (Day ${reminderDay})! You and your partner are required to save ${money(s?.vault.monthly_target ?? 0, cur)} this month. Keep up your shared goal!`
-                : `Your monthly contribution day was on the ${reminderDay}th. You are required to save ${money(s?.vault.monthly_target ?? 0, cur)} this month (so far ${money(monthTotal, cur)} saved).`)}
-          </T>
+            {/* Target Breakdown Metric Box */}
+            <View style={{
+              backgroundColor: c.cardAlt,
+              borderRadius: 14,
+              padding: 12,
+              borderWidth: 1,
+              borderColor: c.border,
+              gap: 8,
+            }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <View style={{ gap: 2 }}>
+                  <T size={10} weight="700" muted>REQUIRED TARGET</T>
+                  <T size={16} weight="800" color={statusColor}>
+                    {money(targetAmount, cur)}
+                  </T>
+                </View>
+                <View style={{ alignItems: 'flex-end', gap: 2 }}>
+                  <T size={10} weight="700" muted>SAVED THIS MONTH</T>
+                  <T size={15} weight="800" color={c.text}>
+                    {money(monthTotal, cur)} <T size={11} color={c.muted}>({targetPct}%)</T>
+                  </T>
+                </View>
+              </View>
+              <ProgressBar parts={[
+                { value: Math.min(monthTotal, targetAmount), color: statusColor },
+                { value: Math.max(targetAmount - monthTotal, 0), color: c.border + '60' },
+              ]} />
+            </View>
 
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
+            {/* Actions Row */}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 2 }}>
+              <Pressable
+                onPress={() => {
+                  const partnerShare = Math.round(targetAmount / Math.max(1, (me?.partners?.length ?? 1) + 1));
+                  setAmount(String(partnerShare));
+                  setStatusConfig({
+                    visible: true,
+                    title: 'Ready to Save',
+                    message: `Suggested monthly share of ${money(partnerShare, cur)} has been filled below. Add your note and tap 'Save' to deposit.`,
+                    type: 'info',
+                  });
+                }}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                  backgroundColor: statusColor,
+                  paddingHorizontal: 14,
+                  paddingVertical: 8,
+                  borderRadius: 10,
+                }}>
+                <Ionicons name="add-circle-outline" size={16} color={c.onAccent} />
+                <T size={13} weight="800" color={c.onAccent}>
+                  + Save Now
+                </T>
+              </Pressable>
+
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                {isVaultOwner && (
+                  <Pressable
+                    onPress={() => setShowEditDay(!showEditDay)}
+                    hitSlop={6}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 4,
+                      paddingHorizontal: 10,
+                      paddingVertical: 8,
+                      borderRadius: 10,
+                      backgroundColor: c.cardAlt,
+                      borderWidth: 1,
+                      borderColor: c.border,
+                    }}>
+                    <Ionicons name="calendar-outline" size={14} color={c.accent} />
+                    <T size={12} weight="700" color={c.accent}>
+                      {showEditDay ? t('cancel') : t('change_day')}
+                    </T>
+                  </Pressable>
+                )}
+              </View>
+            </View>
+
+            {/* Schedule footer note */}
             <T size={11} muted>
               Scheduled for day {reminderDay} of every month for both partners
             </T>
-            {isVaultOwner && (
-              <Pressable onPress={() => setShowEditDay(!showEditDay)} hitSlop={6}>
-                <T size={12} weight="700" color={c.accent}>
-                  {showEditDay ? t('cancel') : t('change_day')}
-                </T>
-              </Pressable>
-            )}
-          </View>
-        </Card>
-      )}
+          </Card>
+        );
+      })()}
 
       {/* Admin Quick Setting: Change Reminder Day */}
       {isVaultOwner && showEditDay && (

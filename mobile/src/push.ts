@@ -29,7 +29,7 @@ export async function registerPush() {
             name: 'DuoSave Alerts',
             importance: Notifications.AndroidImportance.MAX,
             vibrationPattern: [0, 250, 250, 250],
-            lightColor: '#D97706',
+            lightColor: '#2ED07C',
             sound: 'default',
             enableVibrate: true,
             showBadge: true,
