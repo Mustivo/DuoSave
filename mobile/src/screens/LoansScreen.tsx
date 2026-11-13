@@ -295,8 +295,24 @@ export default function LoansScreen() {
       <ErrorText msg={error} />
       {data && (
         <Card>
-          <T muted size={12}>{t('available_to_borrow')}</T>
-          <T size={32} weight="800">{money(data.summary.available, cur)}</T>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <View style={{ flex: 1, gap: 2 }}>
+              <T muted size={12}>{t('available_to_borrow')}</T>
+              <T size={32} weight="800">{money(data.summary.available, cur)}</T>
+            </View>
+            <View style={{
+              backgroundColor: c.accent + '18',
+              borderColor: c.accent,
+              borderWidth: 1,
+              paddingHorizontal: 12,
+              paddingVertical: 8,
+              borderRadius: 12,
+              alignItems: 'flex-end',
+            }}>
+              <T size={11} color={c.accent} weight="700">{t('loan_profit')}</T>
+              <T size={18} weight="800" color={c.accent}>{money(data.summary.loanProfit ?? 0, cur)}</T>
+            </View>
+          </View>
           <T size={12} muted>{t('borrow_desc')}</T>
         </Card>
       )}
@@ -328,6 +344,10 @@ export default function LoansScreen() {
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                   <T weight="700" size={15}>{borrowerName}</T>
                   <T weight="800" size={17} color={c.accent}>{money(Number(l.amount), cur)}</T>
+                </View>
+                <View style={{ flexDirection: 'row', gap: 14, alignItems: 'center' }}>
+                  <T size={12} muted>Principal: <T weight="700" color={c.text}>{money(l.principal ?? (Number(l.amount) - calculateProfitCharge(Number(l.amount))), cur)}</T></T>
+                  <T size={12} color={c.warn} weight="700">Profit Charge: +{money(l.profit_charge ?? calculateProfitCharge(Number(l.amount)), cur)}</T>
                 </View>
                 {l.purpose && <T size={13} muted>{l.purpose}</T>}
                 <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
@@ -374,6 +394,10 @@ export default function LoansScreen() {
               }}>
               <View style={{ flex: 1, gap: 2 }}>
                 <T weight="700" size={15}>{money(Number(l.amount), cur)}</T>
+                <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
+                  <T size={11} muted>Principal: {money(l.principal ?? (Number(l.amount) - calculateProfitCharge(Number(l.amount))), cur)}</T>
+                  <T size={11} color={c.warn} weight="700">Profit: +{money(l.profit_charge ?? calculateProfitCharge(Number(l.amount)), cur)}</T>
+                </View>
                 {l.purpose && <T size={12} muted>{l.purpose}</T>}
                 <T size={11} color={c.warn} weight="600">⏳ {t('status_pending')}</T>
               </View>
@@ -509,6 +533,10 @@ export default function LoansScreen() {
                 )}
               </View>
             </View>
+            <View style={{ flexDirection: 'row', gap: 14, alignItems: 'center', marginTop: 4 }}>
+              <T size={12} muted>Principal: <T weight="700" color={c.text}>{money(l.principal ?? (Number(l.amount) - calculateProfitCharge(Number(l.amount))), cur)}</T></T>
+              <T size={12} color={c.warn} weight="700">Profit Charge: +{money(l.profit_charge ?? calculateProfitCharge(Number(l.amount)), cur)}</T>
+            </View>
             {l.purpose && <T size={13} muted>{l.purpose}</T>}
             <T size={13} muted>{money(Number(l.repaid), cur)} repaid of {money(Number(l.amount), cur)}</T>
             {mine && (
@@ -553,6 +581,10 @@ export default function LoansScreen() {
                         </Pressable>
                       )}
                     </View>
+                  </View>
+                  <View style={{ flexDirection: 'row', gap: 14, alignItems: 'center', marginTop: 2 }}>
+                    <T size={12} muted>Principal: <T weight="700" color={c.text}>{money(l.principal ?? (Number(l.amount) - calculateProfitCharge(Number(l.amount))), cur)}</T></T>
+                    <T size={12} color={c.accent} weight="700">Earned Profit: +{money(l.profit_charge ?? calculateProfitCharge(Number(l.amount)), cur)}</T>
                   </View>
                   {l.purpose && <T size={12} muted>{l.purpose}</T>}
                   <T size={13} muted>

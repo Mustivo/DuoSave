@@ -29,6 +29,20 @@ export function calculateProfitCharge(principal: number): number {
   return 6500;
 }
 
+export function extractLoanProfit(l: { amount: number; purpose?: string | null }): number {
+  if (l.purpose) {
+    const match = l.purpose.match(/Profit charge:\s*(\d+)/i) || l.purpose.match(/fee:\s*(\d+)/i);
+    if (match) return Number(match[1]);
+  }
+  const total = Number(l.amount);
+  if (total <= 5000) return 0;
+  if (total <= 14000 + 1500) return 1500;
+  if (total <= 22000 + 3000) return 3000;
+  if (total <= 35000 + 4000) return 4000;
+  if (total <= 50000 + 5000) return 5000;
+  return 6500;
+}
+
 async function nameOf(id: string) {
   const { data } = await admin.from('profiles').select('name').eq('id', id).single();
   return data?.name ?? 'Your partner';
@@ -123,10 +137,15 @@ money.get('/loans', h(async (req, res) => {
   const { data: profiles } = await admin.from('profiles').select('id, name');
   const profileMap = new Map((profiles ?? []).map((p) => [p.id, p.name]));
 
-  const enriched = (loans ?? []).map((l) => ({
-    ...l,
-    requester_name: profileMap.get(l.borrower_id) || 'Partner',
-  }));
+  const enriched = (loans ?? []).map((l) => {
+    const profitCharge = extractLoanProfit(l);
+    return {
+      ...l,
+      requester_name: profileMap.get(l.borrower_id) || 'Partner',
+      profit_charge: profitCharge,
+      principal: Math.max(0, Number(l.amount) - profitCharge),
+    };
+  });
 
   res.json(enriched);
 }));

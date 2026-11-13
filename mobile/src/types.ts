@@ -14,7 +14,7 @@ export type Me = {
 };
 export type Member = { id: string; name: string; total: number; thisMonth: number; owed: number };
 export type Summary = {
-  vault: Vault; totalDeposited: number; loanedOut: number; available: number; accountSavings?: number; members: Member[];
+  vault: Vault; totalDeposited: number; loanedOut: number; available: number; accountSavings?: number; loanProfit?: number; members: Member[];
 };
 export type Contribution = { id: string; user_id: string; amount: number; note: string | null; created_at: string };
 export type Loan = {
@@ -26,6 +26,8 @@ export type Loan = {
   status: 'pending' | 'active' | 'repaid' | 'rejected';
   created_at: string;
   requester_name?: string;
+  principal?: number;
+  profit_charge?: number;
 };
 export type ActivityItem = { id: string; type: string; amount: number | null; message: string; created_at: string };
 export type Notif = { id: string; type: 'reminder' | 'partner'; title: string; body: string; read: boolean; created_at: string };

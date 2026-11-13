@@ -450,11 +450,16 @@ export default function AnalyticsScreen() {
             <Ionicons name="swap-horizontal-outline" size={18} color={loanedOut > 0 ? c.warn : c.accent} />
             <T weight="700" size={16}>{t('money_out_on_loan')}</T>
           </View>
-          {loanedOut > 0 && (
-            <View style={{ backgroundColor: c.warn + '20', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
-              <T size={12} weight="700" color={c.warn}>{money(loanedOut, cur)}</T>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <View style={{ backgroundColor: c.accent + '20', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
+              <T size={11} weight="700" color={c.accent}>{t('loan_profit')}: {money(data?.summary.loanProfit ?? 0, cur)}</T>
             </View>
-          )}
+            {loanedOut > 0 && (
+              <View style={{ backgroundColor: c.warn + '20', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
+                <T size={12} weight="700" color={c.warn}>{money(loanedOut, cur)}</T>
+              </View>
+            )}
+          </View>
         </View>
 
         {members.filter((m) => m.owed > 0).length === 0 ? (

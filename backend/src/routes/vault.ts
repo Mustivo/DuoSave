@@ -5,6 +5,7 @@ import { admin } from '../supabase';
 import { h, HttpError, requireVault } from '../middleware/auth';
 import { logAndAlertPartner, sendSaveReminder } from '../services/notify';
 import { sendPartnerSetupOtpEmail } from '../services/mailer';
+import { extractLoanProfit } from './money';
 
 export const vault = Router();
 
@@ -511,15 +512,23 @@ vault.get('/vault/summary', requireVault, h(async (req, res) => {
     admin.from('vaults').select('*').eq('id', vid).single(),
     admin.from('contributions').select('user_id,amount,note,created_at').eq('vault_id', vid),
     admin.from('vault_members').select('user_id').eq('vault_id', vid),
-    admin.from('loans').select('borrower_id,amount,repaid,status').eq('vault_id', vid),
+    admin.from('loans').select('borrower_id,amount,repaid,status,purpose').eq('vault_id', vid),
   ]);
   const ids = (ms ?? []).map((m) => m.user_id);
   const { data: profiles } = await admin.from('profiles').select('id,name').in('id', ids);
   const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
 
-  const accountSavings = (contribs ?? [])
-    .filter((c) => c.note === 'Account savings')
-    .reduce((s, c) => s + Number(c.amount), 0);
+  const totalDeposited = Number(bal?.total_deposited ?? 0);
+  const loanedOut = Number(bal?.loaned_out ?? 0);
+  const available = Number(bal?.available ?? 0);
+
+  // Account funds is the same as total account balance
+  const accountSavings = totalDeposited;
+
+  // Calculate profit according to the loan charge
+  const loanProfit = (loans ?? [])
+    .filter((l) => l.status === 'active' || l.status === 'repaid')
+    .reduce((sum, l) => sum + extractLoanProfit(l), 0);
 
   const members = (profiles ?? []).map((p) => {
     // Only personal member savings (Account savings belongs to general account funds)
@@ -535,10 +544,11 @@ vault.get('/vault/summary', requireVault, h(async (req, res) => {
   });
   res.json({
     vault: v,
-    totalDeposited: Number(bal?.total_deposited ?? 0),
-    loanedOut: Number(bal?.loaned_out ?? 0),
-    available: Number(bal?.available ?? 0),
+    totalDeposited,
+    loanedOut,
+    available,
     accountSavings,
+    loanProfit,
     members,
   });
 }));

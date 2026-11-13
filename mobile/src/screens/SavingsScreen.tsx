@@ -35,7 +35,7 @@ export default function SavingsScreen() {
   // Auto-refresh savings and notifications every 10 seconds
   useEffect(() => {
     const interval = setInterval(() => {
-      reload().catch(() => {});
+      reload().catch(() => { });
     }, 10000);
     return () => clearInterval(interval);
   }, []);
@@ -110,7 +110,7 @@ export default function SavingsScreen() {
     try {
       await api.delete('/notifications');
       await reload();
-    } catch {}
+    } catch { }
   };
 
   const s = data?.summary;
@@ -203,18 +203,18 @@ export default function SavingsScreen() {
         const statusBadge = isTodayReminderDay
           ? 'SAVINGS DAY • DUE TODAY'
           : isApproaching
-          ? `UPCOMING DEADLINE • ${daysUntilReminder} DAY${daysUntilReminder > 1 ? 'S' : ''} LEFT`
-          : isPastDue
-          ? `PAYMENT OVERDUE • DUE DAY ${reminderDay}`
-          : `SAVINGS REMINDER • DAY ${reminderDay}`;
+            ? `UPCOMING DEADLINE • ${daysUntilReminder} DAY${daysUntilReminder > 1 ? 'S' : ''} LEFT`
+            : isPastDue
+              ? `PAYMENT OVERDUE • DUE DAY ${reminderDay}`
+              : `SAVINGS REMINDER • DAY ${reminderDay}`;
 
         const statusTitle = isTodayReminderDay
           ? `Monthly Savings Day! (Day ${reminderDay})`
           : isApproaching
-          ? `Savings Deadline in ${daysUntilReminder} day${daysUntilReminder > 1 ? 's' : ''}`
-          : isPastDue
-          ? `Contribution Needed for Day ${reminderDay}`
-          : (data?.reminder?.title ?? t('reminder_banner_title'));
+            ? `Savings Deadline in ${daysUntilReminder} day${daysUntilReminder > 1 ? 's' : ''}`
+            : isPastDue
+              ? `Contribution Needed for Day ${reminderDay}`
+              : (data?.reminder?.title ?? t('reminder_banner_title'));
 
         const targetAmount = s?.vault.monthly_target ?? 6000;
         const targetPct = targetAmount > 0 ? Math.min(100, Math.round((monthTotal / targetAmount) * 100)) : 0;
@@ -270,8 +270,8 @@ export default function SavingsScreen() {
                   (isTodayReminderDay
                     ? `Today is your scheduled savings day! Both partners are required to deposit towards the ${money(targetAmount, cur)} monthly target.`
                     : isApproaching
-                    ? `Upcoming deadline in ${daysUntilReminder} day${daysUntilReminder > 1 ? 's' : ''} (Day ${reminderDay})! Both partners are required to deposit ${money(targetAmount, cur)} this month.`
-                    : `Monthly savings deadline was on day ${reminderDay}. You and your partner are required to save ${money(targetAmount, cur)} this month.`)}
+                      ? `Upcoming deadline in ${daysUntilReminder} day${daysUntilReminder > 1 ? 's' : ''} (Day ${reminderDay})! Both partners are required to deposit ${money(targetAmount, cur)} this month.`
+                      : `Monthly savings deadline was on day ${reminderDay}. You and your partner are required to save ${money(targetAmount, cur)} this month.`)}
               </T>
             </View>
 
@@ -444,6 +444,10 @@ export default function SavingsScreen() {
                 <T weight="700">{money(s.accountSavings, cur)}</T>
               </View>
             )}
+            <View style={{ minWidth: 90 }}>
+              <T size={12} muted color={c.warn}>{t('loan_profit')}</T>
+              <T weight="700" color={c.warn}>{money(s.loanProfit ?? 0, cur)}</T>
+            </View>
             {s.members.map((m, i) => (
               <View key={m.id} style={{ minWidth: 90 }}>
                 <T size={12} muted color={memberColors[(i + 1) % memberColors.length]}>

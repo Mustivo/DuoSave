@@ -107,6 +107,7 @@ const translations = {
     // Loans Screen
     loans_title: 'Loans & Approvals',
     available_to_borrow: 'Available to borrow',
+    loan_profit: 'Loan Profit',
     borrow_desc: 'Loans require partner approval before funds are withdrawn from shared savings.',
     action_required: 'Action Required ({count})',
     partner_requested_loan_desc: 'Your partner requested a loan. Please review and approve or decline:',
@@ -336,6 +337,7 @@ const translations = {
     // Loans Screen
     loans_title: 'Inguzanyo n\'Ibyemezo',
     available_to_borrow: 'Amafaranga ashobora kugurizwa',
+    loan_profit: 'Inyungu y\'inguzanyo',
     borrow_desc: 'Inguzanyo igomba kwemezwa na mugenzi wawe mbere yuko ikurwa mu bwizigame rusange.',
     action_required: 'Hakenewe Icyemezo ({count})',
     partner_requested_loan_desc: 'Mugenzi wawe yasabye inguzanyo. Yisuzume maze uyemeze cyangwa uyihakane:',
