@@ -77,5 +77,14 @@ app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
 });
 
 const port = Number(process.env.PORT ?? 4000);
-app.listen(port, () => console.log(`DuoSave API on :${port}`));
+const server = app.listen(port, () => console.log(`DuoSave API on :${port}`));
+server.on('error', (e: any) => {
+  if (e.code === 'EADDRINUSE') {
+    console.error(`\n⚠️  Port ${port} is already in use by another running server process.`);
+    console.error(`👉 Run: npx kill-port ${port} or change PORT in .env\n`);
+    process.exit(1);
+  } else {
+    console.error('[Server Error]:', e);
+  }
+});
 startReminders();

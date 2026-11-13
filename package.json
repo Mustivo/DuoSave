@@ -1,0 +1,21 @@
+{
+  "name": "duosave",
+  "version": "1.0.0",
+  "private": true,
+  "description": "DuoSave Monorepo root workspace",
+  "scripts": {
+    "start": "npm --prefix mobile start",
+    "mobile": "npm --prefix mobile start",
+    "mobile:android": "npm --prefix mobile run android",
+    "mobile:ios": "npm --prefix mobile run ios",
+    "mobile:typecheck": "npm --prefix mobile run typecheck",
+    "mobile:doctor": "npm --prefix mobile exec expo-doctor",
+    "backend": "npm --prefix backend run dev",
+    "backend:dev": "npm --prefix backend run dev",
+    "backend:build": "npm --prefix backend run build",
+    "backend:start": "npm --prefix backend run start",
+    "backend:typecheck": "npm --prefix backend run typecheck",
+    "typecheck": "npm --prefix backend run typecheck && npm --prefix mobile run typecheck",
+    "install:all": "npm --prefix backend install && npm --prefix mobile install"
+  }
+}
