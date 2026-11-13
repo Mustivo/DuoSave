@@ -106,17 +106,23 @@ export default function AnalyticsScreen() {
             <T size={12} muted numberOfLines={1}>{t('total_vault_savings')}</T>
           </View>
           <T weight="800" size={20} color={c.accent}>{money(totalVaultSaved, cur)}</T>
-          <T size={11} muted>{money(availableBal, cur)} available</T>
+          {loanedOut > 0 ? (
+            <T size={10} color={c.warn} weight="700">
+              {money(totalVaultSaved, cur)} – {money(loanedOut, cur)} = {money(availableBal, cur)}
+            </T>
+          ) : (
+            <T size={11} muted>{money(availableBal, cur)} available</T>
+          )}
         </Card>
 
         <Card style={{ flex: 1, padding: 14, gap: 4 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <Ionicons name="trending-up-outline" size={17} color={c.blue} />
-            <T size={12} muted numberOfLines={1}>{t('this_month_saved')}</T>
+            <T size={12} muted numberOfLines={1}>Required to Save</T>
           </View>
-          <T weight="800" size={20} color={c.text}>{money(thisMonthMembersTotal, cur)}</T>
-          <T size={11} color={targetPct >= 100 ? c.accent : c.warn} weight="700">
-            {monthlyTarget > 0 ? `${targetPct}% of goal` : 'Active'}
+          <T weight="800" size={20} color={c.text}>{money(monthlyTarget > 0 ? monthlyTarget : 6000, cur)}</T>
+          <T size={11} color={targetPct >= 100 ? c.accent : c.blue} weight="700">
+            {money(thisMonthMembersTotal, cur)} saved ({targetPct}%)
           </T>
         </Card>
       </View>

@@ -55,7 +55,10 @@ export async function sendSaveReminder(
   const ids = await membersOf(vaultId);
   if (!ids.length) return;
 
+  const count = ids.length;
+  const targetPerPartner = Math.round(monthlyTarget / Math.max(1, count));
   const targetFormatted = monthlyTarget > 0 ? `${monthlyTarget.toLocaleString()} ${currency}` : `your monthly target`;
+  const partnerRequiredFormatted = targetPerPartner > 0 ? `${targetPerPartner.toLocaleString()} ${currency}` : targetFormatted;
   const currentDay = new Date().getDate();
   const day = reminderDay ?? 28;
 
@@ -65,17 +68,17 @@ export async function sendSaveReminder(
 
   if (currentDay === day) {
     title = '🔔 Monthly Savings Day!';
-    body = `Today is your scheduled monthly savings day (Day ${day})! Both partners are reminded to save towards the ${targetFormatted} monthly target.`;
-    activityMsg = `Monthly savings day alert: Required target of ${targetFormatted} due today (Day ${day})`;
+    body = `Today is your scheduled monthly savings day (Day ${day})! You are required to contribute your monthly share of ${partnerRequiredFormatted} (Vault target: ${targetFormatted}).`;
+    activityMsg = `Monthly savings day alert: You are required to save ${partnerRequiredFormatted} today (Day ${day})`;
   } else if (daysBefore === 3 || day - currentDay === 3) {
     title = `⏰ Savings Reminder (3 Days Remaining)`;
-    body = `Upcoming savings deadline in 3 days (Day ${day})! You and your partner are required to save ${targetFormatted} this month.`;
-    activityMsg = `3-Day notice: Required monthly savings of ${targetFormatted} due on day ${day}`;
+    body = `Upcoming savings deadline in 3 days (Day ${day})! You are required to contribute your monthly share of ${partnerRequiredFormatted} (Vault target: ${targetFormatted}).`;
+    activityMsg = `3-Day notice: You are required to save ${partnerRequiredFormatted} due on day ${day}`;
   } else {
     const daysLeft = day > currentDay ? day - currentDay : (30 - currentDay + day);
     title = `⏰ Savings Reminder (Due Day ${day})`;
-    body = `Your monthly savings deadline is on day ${day} (in ${daysLeft} days). You and your partner are required to save ${targetFormatted} this month.`;
-    activityMsg = `Savings reminder: Required monthly savings of ${targetFormatted} due on day ${day} (in ${daysLeft} days)`;
+    body = `Your monthly savings deadline is on day ${day} (in ${daysLeft} days). You are required to contribute your monthly share of ${partnerRequiredFormatted} (Vault target: ${targetFormatted}).`;
+    activityMsg = `Savings reminder: Required savings of ${partnerRequiredFormatted} due on day ${day} (in ${daysLeft} days)`;
   }
 
   await admin.from('notifications').insert(

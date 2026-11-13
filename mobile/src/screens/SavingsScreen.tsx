@@ -217,6 +217,8 @@ export default function SavingsScreen() {
               : (data?.reminder?.title ?? t('reminder_banner_title'));
 
         const targetAmount = s?.vault.monthly_target ?? 6000;
+        const partnersCount = Math.max(1, s?.members.length ?? 1);
+        const requiredPerPartner = Math.round(targetAmount / partnersCount);
         const targetPct = targetAmount > 0 ? Math.min(100, Math.round((monthTotal / targetAmount) * 100)) : 0;
 
         return (
@@ -268,10 +270,10 @@ export default function SavingsScreen() {
               <T size={13} muted style={{ lineHeight: 19 }}>
                 {data?.reminder?.body ??
                   (isTodayReminderDay
-                    ? `Today is your scheduled savings day! Both partners are required to deposit towards the ${money(targetAmount, cur)} monthly target.`
+                    ? `Today is your scheduled monthly savings day (Day ${reminderDay})! You are required to contribute your monthly share of ${money(requiredPerPartner, cur)} (Shared vault target: ${money(targetAmount, cur)}).`
                     : isApproaching
-                      ? `Upcoming deadline in ${daysUntilReminder} day${daysUntilReminder > 1 ? 's' : ''} (Day ${reminderDay})! Both partners are required to deposit ${money(targetAmount, cur)} this month.`
-                      : `Monthly savings deadline was on day ${reminderDay}. You and your partner are required to save ${money(targetAmount, cur)} this month.`)}
+                      ? `Upcoming deadline in ${daysUntilReminder} day${daysUntilReminder > 1 ? 's' : ''} (Day ${reminderDay})! You are required to contribute your monthly share of ${money(requiredPerPartner, cur)} (Shared vault target: ${money(targetAmount, cur)}).`
+                      : `Monthly savings deadline was on day ${reminderDay}. You are required to contribute your monthly share of ${money(requiredPerPartner, cur)} (Shared vault target: ${money(targetAmount, cur)}).`)}
               </T>
             </View>
 
@@ -286,15 +288,15 @@ export default function SavingsScreen() {
             }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                 <View style={{ gap: 2 }}>
-                  <T size={10} weight="700" muted>REQUIRED TARGET</T>
+                  <T size={10} weight="700" muted>YOUR REQUIRED SHARE</T>
                   <T size={16} weight="800" color={statusColor}>
-                    {money(targetAmount, cur)}
+                    {money(requiredPerPartner, cur)}
                   </T>
                 </View>
                 <View style={{ alignItems: 'flex-end', gap: 2 }}>
-                  <T size={10} weight="700" muted>SAVED THIS MONTH</T>
+                  <T size={10} weight="700" muted>VAULT TARGET (TOTAL)</T>
                   <T size={15} weight="800" color={c.text}>
-                    {money(monthTotal, cur)} <T size={11} color={c.muted}>({targetPct}%)</T>
+                    {money(targetAmount, cur)}
                   </T>
                 </View>
               </View>
@@ -302,6 +304,10 @@ export default function SavingsScreen() {
                 { value: Math.min(monthTotal, targetAmount), color: statusColor },
                 { value: Math.max(targetAmount - monthTotal, 0), color: c.border + '60' },
               ]} />
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <T size={11} muted>Total saved this month: {money(monthTotal, cur)}</T>
+                <T size={11} weight="700" color={statusColor}>{targetPct}% completed</T>
+              </View>
             </View>
 
             {/* Actions Row */}
@@ -429,9 +435,19 @@ export default function SavingsScreen() {
           <T muted size={12}>{t('total_balance')}</T>
           <T size={36} weight="800">{money(s.available, cur)}</T>
           {s.loanedOut > 0 && (
-            <T size={12} muted>
-              {t('saved_amount_out', { saved: money(s.totalDeposited, cur), loaned: money(s.loanedOut, cur) })}
-            </T>
+            <View style={{
+              backgroundColor: c.warn + '15',
+              borderColor: c.warn + '40',
+              borderWidth: 1,
+              borderRadius: 12,
+              padding: 10,
+              gap: 3,
+            }}>
+              <T size={11} color={c.warn} weight="700">Vault Balance Equation:</T>
+              <T size={13} weight="800" color={c.text}>
+                {money(s.totalDeposited, cur)} (Total) – {money(s.loanedOut, cur)} (Loan Taken) = {money(s.available, cur)} Available
+              </T>
+            </View>
           )}
           <ProgressBar parts={[
             ...(s.accountSavings && s.accountSavings > 0 ? [{ value: s.accountSavings, color: c.accent }] : []),
@@ -495,7 +511,40 @@ export default function SavingsScreen() {
       <Card>
         <T weight="700" size={16}>{t('add_your_savings')}</T>
         <Input label={`${t('amount_label')} (${cur})`} value={amount} onChangeText={setAmount} keyboardType="decimal-pad" placeholder="0.00" />
-        <Input label={t('note_label')} value={note} onChangeText={setNote} placeholder={t('note_placeholder')} />
+        
+        {/* Quick Note Selector: monthly, addition money, bonus */}
+        <View style={{ gap: 6 }}>
+          <T size={12} muted weight="600">{t('note_label')}</T>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            {[
+              { key: 'monthly', label: 'Monthly' },
+              { key: 'addition money', label: 'Addition money' },
+              { key: 'bonus', label: 'Bonus' },
+            ].map((item) => {
+              const isSelected = note.toLowerCase() === item.key.toLowerCase();
+              return (
+                <Pressable
+                  key={item.key}
+                  onPress={() => setNote(item.label)}
+                  style={{
+                    flex: 1,
+                    paddingVertical: 9,
+                    borderRadius: 10,
+                    alignItems: 'center',
+                    borderWidth: 1.5,
+                    borderColor: isSelected ? c.accent : c.border,
+                    backgroundColor: isSelected ? c.accent + '22' : c.cardAlt,
+                  }}>
+                  <T size={12} weight={isSelected ? '800' : '600'} color={isSelected ? c.accent : c.text}>
+                    {item.label}
+                  </T>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
+        <Input value={note} onChangeText={setNote} placeholder="Or enter custom note..." />
         <ErrorText msg={err} />
         <Button label={t('save')} onPress={save} loading={busy} />
       </Card>

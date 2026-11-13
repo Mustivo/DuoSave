@@ -107,18 +107,46 @@ export function T({ children, size = 14, weight = '400', muted, color, style, nu
 }
 
 export function Button({ label, onPress, variant = 'primary', loading, disabled }: {
-  label: string; onPress: () => void; variant?: 'primary' | 'ghost' | 'danger'; loading?: boolean; disabled?: boolean;
+  label: string; onPress: () => void | Promise<any>; variant?: 'primary' | 'ghost' | 'danger'; loading?: boolean; disabled?: boolean;
 }) {
   const { c } = useTheme();
+  const [internalLoading, setInternalLoading] = useState(false);
   const bg = variant === 'primary' ? c.accent : variant === 'danger' ? c.danger : 'transparent';
   const fg = variant === 'ghost' ? c.text : variant === 'danger' ? '#fff' : c.onAccent;
+  const isBusy = !!loading || internalLoading;
+
+  const handlePress = async () => {
+    if (isBusy || disabled) return;
+    try {
+      const res = onPress();
+      if (res && typeof (res as any).then === 'function') {
+        setInternalLoading(true);
+        await res;
+      } else {
+        setInternalLoading(true);
+        setTimeout(() => setInternalLoading(false), 500);
+      }
+    } catch (e) {
+      throw e;
+    } finally {
+      setInternalLoading(false);
+    }
+  };
+
   return (
-    <Pressable onPress={onPress} disabled={loading || disabled}
+    <Pressable onPress={handlePress} disabled={isBusy || disabled}
       style={({ pressed }) => ({
         backgroundColor: bg, borderColor: c.border, borderWidth: variant === 'ghost' ? 1 : 0,
-        borderRadius: 14, paddingVertical: 14, alignItems: 'center', opacity: disabled ? 0.5 : pressed ? 0.85 : 1,
+        borderRadius: 14, paddingVertical: 14, alignItems: 'center', opacity: (disabled || isBusy) ? 0.75 : pressed ? 0.85 : 1,
       })}>
-      {loading ? <ActivityIndicator color={fg} /> : <Text style={{ color: fg, fontWeight: '700', fontSize: 15 }}>{label}</Text>}
+      {isBusy ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, justifyContent: 'center' }}>
+          <ActivityIndicator size="small" color={fg} />
+          <Text style={{ color: fg, fontWeight: '700', fontSize: 15 }}>Processing...</Text>
+        </View>
+      ) : (
+        <Text style={{ color: fg, fontWeight: '700', fontSize: 15 }}>{label}</Text>
+      )}
     </Pressable>
   );
 }

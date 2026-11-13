@@ -313,7 +313,22 @@ export default function LoansScreen() {
               <T size={18} weight="800" color={c.accent}>{money(data.summary.loanProfit ?? 0, cur)}</T>
             </View>
           </View>
-          <T size={12} muted>{t('borrow_desc')}</T>
+          {data.summary.loanedOut > 0 ? (
+            <View style={{
+              backgroundColor: c.warn + '15',
+              borderColor: c.warn + '40',
+              borderWidth: 1,
+              borderRadius: 10,
+              padding: 9,
+              marginTop: 4,
+            }}>
+              <T size={12} weight="700" color={c.warn}>
+                Vault Equation: {money(data.summary.totalDeposited, cur)} (Total) – {money(data.summary.loanedOut, cur)} (Loan taken) = {money(data.summary.available, cur)} Available
+              </T>
+            </View>
+          ) : (
+            <T size={12} muted>{t('borrow_desc')}</T>
+          )}
         </Card>
       )}
 
@@ -516,7 +531,8 @@ export default function LoansScreen() {
       {activeLoans.map((l) => {
         const owed = Number(l.amount) - Number(l.repaid);
         const mine = l.borrower_id === me?.profile.id;
-        const canDelete = (mine || me?.profile.email?.toLowerCase() === 'stevenmwizerwa1@gmail.com') && Number(l.repaid) === 0;
+        // User rule: Partners cannot delete an active loan without repaying it
+        const canDelete = isVaultOwner && Number(l.repaid) === 0;
         return (
           <Card key={l.id}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>

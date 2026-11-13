@@ -284,15 +284,36 @@ money.post('/loans/:id/repay', h(async (req, res) => {
 /* ---------- Feed + notifications ---------- */
 money.get('/activity', h(async (req, res) => {
   res.setHeader('Cache-Control', 'private, max-age=5, stale-while-revalidate=30');
-  const { data } = await admin.from('activity').select('*')
-    .eq('vault_id', req.vaultId!).order('created_at', { ascending: false }).limit(100);
-  res.json(data ?? []);
+
+  // Check if this user cleared their activity feed on their portal
+  const [{ data: activities }, { data: userClearedEvents }] = await Promise.all([
+    admin.from('activity').select('*').eq('vault_id', req.vaultId!).order('created_at', { ascending: false }).limit(100),
+    admin.from('notifications').select('type,title,created_at').eq('user_id', req.userId).in('type', ['cleared_activity', 'deleted_activity']),
+  ]);
+
+  let items = activities ?? [];
+  const clearAllEvent = (userClearedEvents ?? []).find((e) => e.type === 'cleared_activity');
+  if (clearAllEvent) {
+    const cutoff = new Date(clearAllEvent.created_at).getTime();
+    items = items.filter((a) => new Date(a.created_at).getTime() > cutoff);
+  }
+
+  const deletedIds = new Set(
+    (userClearedEvents ?? []).filter((e) => e.type === 'deleted_activity').map((e) => e.title)
+  );
+  if (deletedIds.size > 0) {
+    items = items.filter((a) => !deletedIds.has(a.id));
+  }
+
+  res.json(items);
 }));
 
 money.get('/notifications', h(async (req, res) => {
   res.setHeader('Cache-Control', 'private, max-age=5, stale-while-revalidate=30');
   const { data } = await admin.from('notifications').select('*')
-    .eq('user_id', req.userId).order('created_at', { ascending: false }).limit(50);
+    .eq('user_id', req.userId)
+    .not('type', 'in', '("cleared_activity","deleted_activity")')
+    .order('created_at', { ascending: false }).limit(50);
   res.json(data ?? []);
 }));
 
@@ -302,7 +323,7 @@ money.post('/notifications/read', h(async (req, res) => {
 }));
 
 money.delete('/notifications', h(async (req, res) => {
-  await admin.from('notifications').delete().eq('user_id', req.userId);
+  await admin.from('notifications').delete().eq('user_id', req.userId).not('type', 'in', '("cleared_activity","deleted_activity")');
   res.json({ ok: true, message: 'All notifications cleared' });
 }));
 
@@ -312,24 +333,46 @@ money.delete('/notifications/:id', h(async (req, res) => {
 }));
 
 money.delete('/activity', h(async (req, res) => {
-  await admin.from('activity').delete().eq('vault_id', req.vaultId!);
-  await admin.from('notifications').delete().eq('user_id', req.userId);
-  res.json({ ok: true, message: 'All activity cleared' });
+  // Only clear for THIS user portal, do NOT delete shared activity for partner!
+  await admin.from('notifications').delete().eq('user_id', req.userId).eq('type', 'cleared_activity');
+  await admin.from('notifications').insert({
+    vault_id: req.vaultId!,
+    user_id: req.userId,
+    type: 'cleared_activity',
+    title: 'cleared_portal',
+    body: new Date().toISOString(),
+  });
+  await admin.from('notifications').delete().eq('user_id', req.userId).not('type', 'in', '("cleared_activity","deleted_activity")');
+  res.json({ ok: true, message: 'Activity cleared from your portal' });
 }));
 
 money.post('/activity/clear', h(async (req, res) => {
-  await admin.from('activity').delete().eq('vault_id', req.vaultId!);
-  await admin.from('notifications').delete().eq('user_id', req.userId);
-  res.json({ ok: true, message: 'All activity cleared' });
+  await admin.from('notifications').delete().eq('user_id', req.userId).eq('type', 'cleared_activity');
+  await admin.from('notifications').insert({
+    vault_id: req.vaultId!,
+    user_id: req.userId,
+    type: 'cleared_activity',
+    title: 'cleared_portal',
+    body: new Date().toISOString(),
+  });
+  await admin.from('notifications').delete().eq('user_id', req.userId).not('type', 'in', '("cleared_activity","deleted_activity")');
+  res.json({ ok: true, message: 'Activity cleared from your portal' });
 }));
 
 money.delete('/activity/:id', h(async (req, res) => {
-  await admin.from('activity').delete().eq('id', req.params.id).eq('vault_id', req.vaultId!);
-  res.json({ ok: true, message: 'Activity deleted' });
+  // Hide this item for this user's portal only
+  await admin.from('notifications').insert({
+    vault_id: req.vaultId!,
+    user_id: req.userId,
+    type: 'deleted_activity',
+    title: req.params.id,
+    body: req.params.id,
+  });
+  res.json({ ok: true, message: 'Activity deleted from your portal' });
 }));
 
 money.post('/notifications/clear', h(async (req, res) => {
-  await admin.from('notifications').delete().eq('user_id', req.userId);
+  await admin.from('notifications').delete().eq('user_id', req.userId).not('type', 'in', '("cleared_activity","deleted_activity")');
   res.json({ ok: true, message: 'All notifications cleared' });
 }));
 
@@ -341,8 +384,11 @@ money.delete('/loans/:id', h(async (req, res) => {
   if (l.borrower_id !== req.userId && !isMaster) {
     throw new HttpError(403, `Only the borrower or master administrator (${MASTER_ADMIN_EMAIL}) can delete this loan`);
   }
-  if (l.status === 'active' && Number(l.repaid) > 0) {
-    throw new HttpError(400, 'Cannot delete an active loan with partial repayments');
+  // User Requirement: "And don’t allow the other partner to delete their loan without repaying it"
+  if (l.status === 'active' && Number(l.repaid) < Number(l.amount)) {
+    if (!isMaster) {
+      throw new HttpError(400, 'You cannot delete an active loan without repaying it first. Please repay the borrowed amount.');
+    }
   }
   await admin.from('loans').delete().eq('id', req.params.id);
   await logAndAlertPartner(req.vaultId!, req.userId, 'loan', `Loan record of ${l.amount} was deleted`);

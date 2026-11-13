@@ -29,9 +29,18 @@ export default function Root() {
   const { c, isDark } = useTheme();
   const { t } = useLanguage();
   const { ready, me } = useAuth();
+  const [splashLoading, setSplashLoading] = useState(true);
   const [activeBanner, setActiveBanner] = useState<{ id: string; title: string; body: string } | null>(null);
   const seenIds = useRef<Set<string>>(new Set());
   const initialLoadDone = useRef(false);
+
+  // Splash screen hold duration (2.8 seconds for smooth professional experience)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSplashLoading(false);
+    }, 2800);
+    return () => clearTimeout(timer);
+  }, []);
 
   const navTheme = useMemo(() => ({
     ...(isDark ? DarkTheme : DefaultTheme),
@@ -88,36 +97,76 @@ export default function Root() {
     return () => clearTimeout(timer);
   }, [activeBanner]);
 
-  if (!ready) {
+  if (!ready || splashLoading) {
     return (
-      <View style={{ flex: 1, backgroundColor: c.bg, justifyContent: 'space-between', alignItems: 'center', paddingVertical: 48, paddingHorizontal: 24 }}>
+      <View style={{ flex: 1, backgroundColor: isDark ? '#0B131E' : '#F7FAFC', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 56, paddingHorizontal: 24 }}>
         {bar}
         <View />
-        <View style={{ alignItems: 'center', gap: 18 }}>
-          {/* Centered DuoSave Logo (Clean, borderless) */}
-          <Image
-            source={require('../assets/icon.png')}
-            style={{ width: 104, height: 104 }}
-            resizeMode="contain"
-          />
-
-          <View style={{ alignItems: 'center', gap: 6 }}>
-            <T size={34} weight="800" style={{ letterSpacing: 0.5 }}>DuoSave</T>
-            <T size={14} muted style={{ letterSpacing: 0.2 }}>
-              Shared Savings Vault
-            </T>
+        <View style={{ alignItems: 'center', gap: 20 }}>
+          {/* Centered DuoSave Logo with Ambient Glow Aura */}
+          <View style={{
+            width: 128,
+            height: 128,
+            borderRadius: 64,
+            backgroundColor: c.accent + '18',
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderWidth: 1.5,
+            borderColor: c.accent + '35',
+            shadowColor: c.accent,
+            shadowOffset: { width: 0, height: 6 },
+            shadowOpacity: 0.25,
+            shadowRadius: 16,
+            elevation: 8,
+          }}>
+            <Image
+              source={require('../assets/icon.png')}
+              style={{ width: 88, height: 88 }}
+              resizeMode="contain"
+            />
           </View>
 
-          <ActivityIndicator size="small" color={c.accent} style={{ marginTop: 12 }} />
+          <View style={{ alignItems: 'center', gap: 8 }}>
+            <T size={36} weight="800" color={c.text} style={{ letterSpacing: 0.8 }}>DuoSave</T>
+            <View style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 6,
+              backgroundColor: c.accent + '20',
+              paddingHorizontal: 12,
+              paddingVertical: 5,
+              borderRadius: 20,
+            }}>
+              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: c.accent }} />
+              <T size={12} weight="700" color={c.accent} style={{ letterSpacing: 0.4 }}>
+                Save Smarter, Together
+              </T>
+            </View>
+          </View>
+
+          <View style={{ alignItems: 'center', gap: 8, marginTop: 14 }}>
+            <ActivityIndicator size="small" color={c.accent} />
+            <T size={12} muted style={{ letterSpacing: 0.3 }}>Securing shared vault session...</T>
+          </View>
         </View>
 
         {/* Footer Security Badge */}
-        <View style={{ alignItems: 'center', gap: 4 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Ionicons name="shield-checkmark" size={14} color={c.accent} />
-            <T size={12} weight="600" color={c.accent}>End-to-End Encrypted</T>
+        <View style={{ alignItems: 'center', gap: 6 }}>
+          <View style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 6,
+            backgroundColor: c.card,
+            paddingHorizontal: 14,
+            paddingVertical: 7,
+            borderRadius: 20,
+            borderWidth: 1,
+            borderColor: c.border,
+          }}>
+            <Ionicons name="shield-checkmark" size={15} color={c.accent} />
+            <T size={12} weight="700" color={c.text}>Bank-Grade Encryption</T>
           </View>
-          <T size={11} muted>v1.0.0</T>
+          <T size={11} muted>Built for Two • DuoSave v1.0.0</T>
         </View>
       </View>
     );
